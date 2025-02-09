@@ -9,7 +9,7 @@
 /* this feature is necessary to constrain matrices,
 however, a bug inside it prevents using type aliases for other types
 */
- #![feature(lazy_type_alias)]
+#![feature(lazy_type_alias)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -95,14 +95,8 @@ however, a bug inside it prevents using type aliases for other types
 #![allow(clippy::module_name_repetitions, reason = "this is a dumb rule")]
 /* clippy end */
 
+pub mod ring;
 pub mod vec2d;
 
-use vec2d::Vec2d;
-
 fn main() {
-    let dupa = vec![vec![1,2,3], vec![4,5,6], vec![7,8,9]].into_iter().map(|col| col.into_iter());
-    let vec2d = Vec2d::from_cols(dupa).unwrap();
-    println!("{:?}", vec2d);
-    println!("{}", vec2d);
 }
-
