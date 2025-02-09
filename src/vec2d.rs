@@ -259,6 +259,12 @@ impl<T> Vec2d<T> {
         (left, right)
     }
 
+    /// Given a col_idx, splits
+    /// ------   ------------
+    /// |self| = |left|right|
+    /// ------   ------------
+    /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
+    /// Otherwise returns error
     pub fn split_horizontally(self, col_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let col_len = self.col_len();
         (0 < col_idx && col_idx < self.nof_cols())
@@ -266,6 +272,14 @@ impl<T> Vec2d<T> {
             .ok_or(Vec2dError::ColIdxOutOfBounds { col_idx, col_len })
     }
 
+    /// Given a row_idx, splits
+    /// ------   -----
+    /// |self| = |top|
+    /// ------   -----
+    ///          |bot|
+    ///          -----
+    /// in such a way top.nof_rows() = row_idx (and bot.nof_rows() = self.nof_rows() - rows_idx).
+    /// Otherwise returns error.
     pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let row_len = self.row_len();
         (0 < row_idx && row_idx < self.nof_rows())
@@ -279,6 +293,14 @@ impl<T> Vec2d<T> {
             .ok_or(Vec2dError::RowIdxOutOfBounds { row_idx, row_len })
     }
 
+    /// Given a col_idx and row_idx, splits
+    /// ------   --------------------
+    /// |self| = |top_left|top_right|
+    /// ------   --------------------
+    ///          |bot_left|bot_right|
+    ///          --------------------
+    /// in such a way top_left.shape() = (col_idx, row_idx)
+    /// whenever it is possible.
     pub fn split(
         self,
         col_idx: usize,
@@ -289,6 +311,96 @@ impl<T> Vec2d<T> {
         let (top_right, bot_right) = right.split_vertically(row_idx)?;
         Ok((top_left, top_right, bot_left, bot_right))
     }
+
+    /// Modifies a 2d vector of a form
+    /// -----------
+    /// |*|i|*|j|*|
+    /// -----------
+    /// to
+    /// -----------
+    /// |*|j|*|i|*|
+    /// -----------
+    /// whenever indices are in proper bounds.
+    /// # Safety
+    /// Note that
+    /// i * col_len + idx <= (nof_cols - 1) * col_len + col_len - 1 = nof_cols * col_len - 1
+    /// and similarly for j.
+    pub fn swap_cols(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
+        let nof_cols = self.nof_cols();
+        let col_len = self.col_len();
+
+        if i >= nof_cols {
+            Err(Vec2dError::RowIdxOutOfBounds {
+                row_idx: i,
+                row_len: nof_cols,
+            })
+        } else if j >= nof_cols {
+            Err(Vec2dError::RowIdxOutOfBounds {
+                row_idx: j,
+                row_len: nof_cols,
+            })
+        } else {
+            (0..col_len)
+                .map(|idx| (i * col_len + idx, j * col_len + idx))
+                .for_each(|(col_i_idx, col_j_idx)| unsafe {
+                    self.buffer.swap_unchecked(col_i_idx, col_j_idx)
+                });
+            Ok(())
+        }
+    }
+
+    /// Modifies a 2d vector of a form
+    /// ---
+    /// |*|
+    /// ---
+    /// |i|
+    /// ---
+    /// |*|
+    /// ---
+    /// |j|
+    /// ---
+    /// |*|
+    /// ---
+    /// to
+    /// ---
+    /// |*|
+    /// ---
+    /// |j|
+    /// ---
+    /// |*|
+    /// ---
+    /// |i|
+    /// ---
+    /// |*|
+    /// ---
+    /// whenever indices are in proper bounds.
+    /// # Safety
+    /// Note that
+    /// i * row_len + idx <= (nof_rows - 1) * row_len + row_len - 1 = nof_rows * row_len - 1
+    /// and similarly for j.
+    pub fn swap_rows(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
+        let nof_rows = self.nof_rows();
+        let row_len = self.row_len();
+
+        if i >= nof_rows {
+            Err(Vec2dError::ColIdxOutOfBounds {
+                col_idx: i,
+                col_len: nof_rows,
+            })
+        } else if j >= nof_rows {
+            Err(Vec2dError::ColIdxOutOfBounds {
+                col_idx: j,
+                col_len: nof_rows,
+            })
+        } else {
+            (0..row_len)
+                .map(|idx| (i + nof_rows * idx, j + nof_rows * idx))
+                .for_each(|(row_i_idx, row_j_idx)| unsafe {
+                    self.buffer.swap_unchecked(row_i_idx, row_j_idx)
+                });
+            Ok(())
+        }
+    }
 }
 
 impl<T: fmt::Display> fmt::Display for Vec2d<T> {
@@ -296,7 +408,7 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
     /// (self.nof_cols() x self.nof_rows())
     /// [*, *, *]
     /// [*, *, *]
-    /// The values are padded for nicer format.
+    /// The values are padded.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let elementwise_stringified = self
             .rows()
@@ -502,7 +614,7 @@ mod test {
             Vec2d::from_cols_vec(vec![vec![7, 8, 9, 10]]).expect("This should be well-defined.");
         let vec = Vec2d::merge_horizontally(u.clone(), v.clone());
         assert_eq!(
-            vec.expect_err("This should fail."),
+            vec.expect_err("The merge should fail."),
             Vec2dError::DifferentColLengths {
                 left_col_len: u.col_len(),
                 right_col_len: v.col_len()
@@ -536,7 +648,7 @@ mod test {
         let vec = Vec2d::merge_vertically(u.clone(), v.clone());
 
         assert_eq!(
-            vec.expect_err("This should fail."),
+            vec.expect_err("The merge should fail."),
             Vec2dError::DifferentRowLengths {
                 top_row_len: u.row_len(),
                 bot_row_len: v.row_len()
@@ -586,7 +698,7 @@ mod test {
 
         let split_at_zero = vec.clone().split_horizontally(0);
         assert_eq!(
-            split_at_zero.expect_err("This should fail."),
+            split_at_zero.expect_err("The split should fail."),
             Vec2dError::ColIdxOutOfBounds {
                 col_idx: 0,
                 col_len: vec.col_len()
@@ -595,7 +707,7 @@ mod test {
 
         let split_at_col_len = vec.clone().split_horizontally(vec.col_len());
         assert_eq!(
-            split_at_col_len.expect_err("This should fail."),
+            split_at_col_len.expect_err("The split should fail."),
             Vec2dError::ColIdxOutOfBounds {
                 col_idx: vec.col_len(),
                 col_len: vec.col_len()
@@ -626,7 +738,7 @@ mod test {
 
         let split_at_zero = vec.clone().split_vertically(0);
         assert_eq!(
-            split_at_zero.expect_err("This should fail."),
+            split_at_zero.expect_err("The split should fail."),
             Vec2dError::RowIdxOutOfBounds {
                 row_idx: 0,
                 row_len: vec.row_len()
@@ -635,7 +747,7 @@ mod test {
 
         let split_at_row_len = vec.clone().split_vertically(vec.row_len());
         assert_eq!(
-            split_at_row_len.expect_err("This should fail."),
+            split_at_row_len.expect_err("The split should fail."),
             Vec2dError::RowIdxOutOfBounds {
                 row_idx: vec.row_len(),
                 row_len: vec.row_len()
@@ -665,26 +777,72 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn swap_cols() {
-        todo!()
+        let mut vec = Vec2d::from_cols_vec(vec![vec![0, 0], vec![1, 1], vec![2, 2], vec![3, 3]])
+            .expect("This should be well-defined.");
+        vec.swap_cols(0, 2)
+            .expect("The swap should be well-defined.");
+        assert_eq!(vec.buffer, vec![2, 2, 1, 1, 0, 0, 3, 3]);
     }
 
     #[test]
-    #[ignore]
     fn swap_cols_idx_out_of_bounds() {
-        todo!()
+        let vec = Vec2d::from_cols_vec(vec![vec![0, 0], vec![1, 1], vec![2, 2], vec![3, 3]])
+            .expect("This should be well-defined.");
+
+        assert_eq!(
+            vec.clone()
+                .swap_cols(0, 5)
+                .expect_err("The swap should fail."),
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 5,
+                row_len: vec.row_len()
+            }
+        );
+
+        assert_eq!(
+            vec.clone()
+                .swap_cols(5, 3)
+                .expect_err("The swap should fail."),
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 5,
+                row_len: vec.row_len()
+            }
+        );
     }
 
     #[test]
-    #[ignore]
     fn swap_rows() {
-        todo!()
+        let mut vec = Vec2d::from_rows_vec(vec![vec![0, 0], vec![1, 1], vec![2, 2]])
+            .expect("This should be well-defined.");
+        vec.swap_rows(1, 2)
+            .expect("The swap should be well-defined");
+        assert_eq!(vec.buffer, vec![0, 2, 1, 0, 2, 1]);
     }
 
     #[test]
-    #[ignore]
     fn swap_rows_idx_out_of_bounds() {
-        todo!()
+        let vec = Vec2d::from_rows_vec(vec![vec![0, 0], vec![1, 1], vec![2, 2]])
+            .expect("This should be well-defined.");
+
+        assert_eq!(
+            vec.clone()
+                .swap_rows(0, 5)
+                .expect_err("The swap should fail."),
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 5,
+                col_len: vec.col_len()
+            }
+        );
+
+        assert_eq!(
+            vec.clone()
+                .swap_rows(5, 2)
+                .expect_err("The swap should fail."),
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 5,
+                col_len: vec.col_len()
+            }
+        );
     }
 }
