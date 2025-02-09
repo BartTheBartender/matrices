@@ -159,9 +159,11 @@ impl<T> Vec2d<T> {
         Self::from_rows(rows_vec.into_iter().map(|row| row.into_iter()))
     }
 
-    /// Merging horizontally and vertically.
-    /// Given 2d vectors u and v, create a 2d vector [u|v].
-    /// The caller must ensure that that the lengths of collumns are the same.
+    /// Given 2d vectors left and right, create the 2d vector
+    /// ------------
+    /// |left|right|
+    /// ------------
+    /// The caller must ensure that left and right have the same col_len
     fn merge_horizontally_unchecked(left: Self, mut right: Self) -> Self {
         let left_nof_cols = left.nof_cols();
         let mut buffer = left.buffer;
@@ -180,14 +182,12 @@ impl<T> Vec2d<T> {
     pub fn merge_horizontally(left: Self, right: Self) -> Result<Self, Vec2dError> {
         let left_col_len = left.col_len();
         let right_col_len = right.col_len();
-        if left_col_len == right_col_len {
-            Ok(Self::merge_horizontally_unchecked(left, right))
-        } else {
-            Err(Vec2dError::DifferentColLengths {
+        (left_col_len == right_col_len)
+            .then(|| Self::merge_horizontally_unchecked(left, right))
+            .ok_or(Vec2dError::DifferentColLengths {
                 left_col_len,
                 right_col_len,
             })
-        }
     }
 
     /// Given 2d vectors top and bot, if they have the same row_len's, create the 2d vector
@@ -199,19 +199,19 @@ impl<T> Vec2d<T> {
     pub fn merge_vertically(mut top: Self, mut bot: Self) -> Result<Self, Vec2dError> {
         let top_row_len = top.row_len();
         let bot_row_len = bot.row_len();
-        if top_row_len == bot_row_len {
-            top.transpose();
-            bot.transpose();
-            let mut transposed = Self::merge_horizontally_unchecked(top, bot);
+        (top_row_len == bot_row_len)
+            .then(|| {
+                top.transpose();
+                bot.transpose();
+                let mut transposed = Self::merge_horizontally_unchecked(top, bot);
 
-            transposed.transpose();
-            Ok(transposed)
-        } else {
-            Err(Vec2dError::DifferentRowLengths {
+                transposed.transpose();
+                transposed
+            })
+            .ok_or(Vec2dError::DifferentRowLengths {
                 top_row_len,
                 bot_row_len,
             })
-        }
     }
 
     /// Creates a 2d vector
@@ -231,31 +231,96 @@ impl<T> Vec2d<T> {
         let right = Self::merge_vertically(top_right, bot_right)?;
         Self::merge_horizontally(left, right)
     }
+
+    /// Given a col_idx, splits
+    /// ------   ------------
+    /// |self| = |left|right|
+    /// ------   ------------
+    /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
+    /// The caller must ensure that col_idx in 1..self.nof_cols()
+    fn split_horizontally_unchecked(self, col_idx: usize) -> (Self, Self) {
+        let nof_rows = self.nof_rows();
+        let nof_cols = self.nof_cols();
+
+        let mut left_buffer = self.buffer;
+        let right_buffer = left_buffer.split_off(col_idx * self.nof_rows);
+        let left = Self {
+            buffer: left_buffer,
+            nof_cols: col_idx,
+            nof_rows,
+        };
+
+        let right = Self {
+            buffer: right_buffer,
+            nof_cols: nof_cols - col_idx,
+            nof_rows,
+        };
+
+        (left, right)
+    }
+
+    pub fn split_horizontally(self, col_idx: usize) -> Result<(Self, Self), Vec2dError> {
+        let col_len = self.col_len();
+        (0 < col_idx && col_idx < self.nof_cols())
+            .then(|| self.split_horizontally_unchecked(col_idx))
+            .ok_or(Vec2dError::ColIdxOutOfBounds { col_idx, col_len })
+    }
+
+    pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
+        let row_len = self.row_len();
+        (0 < row_idx && row_idx < self.nof_rows())
+            .then(|| {
+                self.transpose();
+                let (mut top, mut bot) = self.split_horizontally_unchecked(row_idx);
+                top.transpose();
+                bot.transpose();
+                (top, bot)
+            })
+            .ok_or(Vec2dError::RowIdxOutOfBounds { row_idx, row_len })
+    }
+
+    pub fn split(
+        self,
+        col_idx: usize,
+        row_idx: usize,
+    ) -> Result<(Self, Self, Self, Self), Vec2dError> {
+        let (left, right) = self.split_horizontally(col_idx)?;
+        let (top_left, bot_left) = left.split_vertically(row_idx)?;
+        let (top_right, bot_right) = right.split_vertically(row_idx)?;
+        Ok((top_left, top_right, bot_left, bot_right))
+    }
 }
 
 impl<T: fmt::Display> fmt::Display for Vec2d<T> {
+    /// Displays the 2d vector in a format
+    /// (self.nof_cols() x self.nof_rows())
+    /// [*, *, *]
+    /// [*, *, *]
+    /// The values are padded for nicer format.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        let mut padding = 0;
+        let elementwise_stringified = self
+            .rows()
+            .map(move |row| row.map(T::to_string).collect::<Vec<String>>())
+            .collect::<Vec<_>>();
 
-        let elementwise_stringified = self.rows().map(move |row| {
-            row.map(move |entry| entry.to_string())
-                .inspect(move |entry| {
-                    if entry.len() > padding {
-                        padding = entry.len()
-                    }
-                })
-        });
+        let padding: usize = elementwise_stringified
+            .iter()
+            .flatten()
+            .map(|entry| entry.len())
+            .max()
+            .unwrap_or(0);
 
         let stringified = elementwise_stringified
+            .into_iter()
             .map(|row| {
-                row.map(|entry| format!("{:<width$}", entry, width = padding,))
+                row.into_iter()
+                    .map(|entry| format!("{}{}", " ".repeat(padding - entry.len()), entry))
                     .collect::<Vec<_>>()
                     .join(", ")
             })
             .map(|row_stringified| format!("[{}]", row_stringified))
             .collect::<Vec<_>>()
             .join("\n");
-
         write!(
             f,
             "({} x {})\n{}",
@@ -500,32 +565,126 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn split_horizontally() {
-        todo!()
+        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
+        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+        let (left, right) = vec
+            .split_horizontally(1)
+            .expect("The split should be well-defined.");
+
+        assert_eq!(left.shape(), (3, 1));
+        assert_eq!(left.buffer, vec![1, 4, 7]);
+
+        assert_eq!(right.shape(), (3, 2));
+        assert_eq!(right.buffer, vec![2, 5, 8, 3, 6, 9]);
     }
 
     #[test]
-    #[ignore]
     fn split_horizontally_idx_out_of_bounds() {
-        todo!()
+        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
+        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+
+        let split_at_zero = vec.clone().split_horizontally(0);
+        assert_eq!(
+            split_at_zero.expect_err("This should fail."),
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 0,
+                col_len: vec.col_len()
+            }
+        );
+
+        let split_at_col_len = vec.clone().split_horizontally(vec.col_len());
+        assert_eq!(
+            split_at_col_len.expect_err("This should fail."),
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: vec.col_len(),
+                col_len: vec.col_len()
+            }
+        );
     }
 
     #[test]
-    #[ignore]
     fn split_vertically() {
-        todo!()
+        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
+        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+
+        let (top, bot) = vec
+            .split_vertically(2)
+            .expect("The split should be well-defined.");
+
+        assert_eq!(top.shape(), (2, 3));
+        assert_eq!(top.buffer, vec![1, 4, 2, 5, 3, 6]);
+
+        assert_eq!(bot.shape(), (1, 3));
+        assert_eq!(bot.buffer, vec![7, 8, 9]);
     }
 
     #[test]
-    #[ignore]
     fn split_vertically_idx_out_of_bounds() {
+        let rows = vec![vec![1, 2, 3], vec![4, 5, 6]];
+        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+
+        let split_at_zero = vec.clone().split_vertically(0);
+        assert_eq!(
+            split_at_zero.expect_err("This should fail."),
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 0,
+                row_len: vec.row_len()
+            }
+        );
+
+        let split_at_row_len = vec.clone().split_vertically(vec.row_len());
+        assert_eq!(
+            split_at_row_len.expect_err("This should fail."),
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: vec.row_len(),
+                row_len: vec.row_len()
+            }
+        );
+    }
+
+    #[test]
+    fn split() {
+        let vec = Vec2d::from_rows((1..5).map(|i| (1..6).map(move |j| i * j)))
+            .expect("This should be well-defined.");
+        println!("{}", vec);
+        let (top_left, top_right, bot_left, bot_right) =
+            vec.split(3, 3).expect("The split should be well-defined.");
+
+        assert_eq!(top_left.shape(), (3, 3));
+        assert_eq!(top_left.buffer, vec![1, 2, 3, 2, 4, 6, 3, 6, 9]);
+
+        assert_eq!(top_right.shape(), (3, 2));
+        assert_eq!(top_right.buffer, vec![4, 8, 12, 5, 10, 15]);
+
+        assert_eq!(bot_left.shape(), (1, 3));
+        assert_eq!(bot_left.buffer, vec![4, 8, 12]);
+
+        assert_eq!(bot_right.shape(), (1, 2));
+        assert_eq!(bot_right.buffer, vec![16, 20]);
+    }
+
+    #[test]
+    #[ignore]
+    fn swap_cols() {
         todo!()
     }
 
     #[test]
     #[ignore]
-    fn split() {
+    fn swap_cols_idx_out_of_bounds() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn swap_rows() {
+        todo!()
+    }
+
+    #[test]
+    #[ignore]
+    fn swap_rows_idx_out_of_bounds() {
         todo!()
     }
 }
