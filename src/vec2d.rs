@@ -359,7 +359,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn into_rows() {
         let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
         let vec2d = Vec2d::from_rows(vec.into_iter().map(|row| row.into_iter()))
