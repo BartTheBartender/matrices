@@ -3,14 +3,14 @@ use itertools::iproduct;
 use std::{fmt, mem};
 
 custom_error! {
-    #[derive(PartialEq, Eq)]
+    #[derive(PartialEq, Eq, Clone)]
     pub Vec2dError
     DifferentLengthsColsIterator = "Cols in the iterator had different lengths.",
     DifferentLengthsRowsIterator = "Rows in the iterator had different lengths.",
     EmptyColsIterator = "Iterator of cols was empty.",
     EmptyRowsIterator = "Iterator of rows was empty.",
-    DifferentColLens{u_col_len: usize, v_col_len: usize} = "Different col_lens (u.col_len() = {u_col_len}, v.col_len() = {v_col_len}).",
-    DifferentRowLens{u_row_len: usize, v_row_len: usize} = "Different row_lens (u.row_len() = {u_row_len}, v.row_len() = {v_row_len}).",
+    DifferentColLengths{left_col_len: usize, right_col_len: usize} = "Different col_lens (left.col_len() = {left_col_len}, right.col_len() = {right_col_len}).",
+    DifferentRowLengths{top_row_len: usize, bot_row_len: usize} = "Different row_lens (top.row_len() = {top_row_len}, bot.row_len() = {bot_row_len}).",
     ColIdxOutOfBounds{col_idx: usize, col_len: usize} = "Col_idx ({col_idx}) out of bound col_len ({col_len}).",
     RowIdxOutOfBounds{row_idx: usize, row_len: usize} = "Row_idx ({row_idx}) out of bound row_len ({row_len}).",
     Unexpected = "This bug is unexpected"
@@ -147,7 +147,9 @@ impl<T> Vec2d<T> {
                 self_transposed
             })
             .map_err(|error| match error {
-                Vec2dError::DifferentLengthsColsIterator => Vec2dError::DifferentLengthsRowsIterator,
+                Vec2dError::DifferentLengthsColsIterator => {
+                    Vec2dError::DifferentLengthsRowsIterator
+                }
                 Vec2dError::EmptyColsIterator => Vec2dError::EmptyRowsIterator,
                 _ => Vec2dError::Unexpected,
             })
@@ -160,58 +162,74 @@ impl<T> Vec2d<T> {
     /// Merging horizontally and vertically.
     /// Given 2d vectors u and v, create a 2d vector [u|v].
     /// The caller must ensure that that the lengths of collumns are the same.
-    fn merge_horizontally_unchecked(u: Self, mut v: Self) -> Self {
-        let u_nof_cols = u.nof_cols();
-        let mut buffer = u.buffer;
-        buffer.append(&mut v.buffer);
+    fn merge_horizontally_unchecked(left: Self, mut right: Self) -> Self {
+        let left_nof_cols = left.nof_cols();
+        let mut buffer = left.buffer;
+        buffer.append(&mut right.buffer);
         Self {
             buffer,
-            nof_cols: u_nof_cols + v.nof_cols(),
-            nof_rows: v.nof_rows(),
+            nof_cols: left_nof_cols + right.nof_cols(),
+            nof_rows: right.nof_rows(),
         }
     }
 
-    /// Given 2d vectors u and v, create a 2d vector [u|v]
-    pub fn merge_horizontally(u: Self, v: Self) -> Result<Self, Vec2dError> {
-        let u_col_len = u.col_len();
-        let v_col_len = v.col_len();
-        if u_col_len == v_col_len {
-            Ok(Self::merge_horizontally_unchecked(u, v))
+    /// Given 2d vectors left and right, if they have the same col_len's, create the 2d vector
+    /// ------------
+    /// |left|right|
+    /// ------------
+    pub fn merge_horizontally(left: Self, right: Self) -> Result<Self, Vec2dError> {
+        let left_col_len = left.col_len();
+        let right_col_len = right.col_len();
+        if left_col_len == right_col_len {
+            Ok(Self::merge_horizontally_unchecked(left, right))
         } else {
-            Err(Vec2dError::DifferentColLens {
-                u_col_len,
-                v_col_len,
+            Err(Vec2dError::DifferentColLengths {
+                left_col_len,
+                right_col_len,
             })
         }
     }
 
-    /// Given 2d vectors u and v, create a 2d vector [u^\u|v^T]^T
-    pub fn merge_vertically(mut u: Self, mut v: Self) -> Result<Self, Vec2dError> {
-        let u_row_len = u.row_len();
-        let v_row_len = v.row_len();
-        if u_row_len == v_row_len {
-            u.transpose();
-            v.transpose();
-            let mut transposed = Self::merge_horizontally_unchecked(u, v);
+    /// Given 2d vectors top and bot, if they have the same row_len's, create the 2d vector
+    /// -----
+    /// |top|
+    /// -----
+    /// |bot|
+    /// -----
+    pub fn merge_vertically(mut top: Self, mut bot: Self) -> Result<Self, Vec2dError> {
+        let top_row_len = top.row_len();
+        let bot_row_len = bot.row_len();
+        if top_row_len == bot_row_len {
+            top.transpose();
+            bot.transpose();
+            let mut transposed = Self::merge_horizontally_unchecked(top, bot);
 
             transposed.transpose();
             Ok(transposed)
         } else {
-            Err(Vec2dError::DifferentRowLens {
-                u_row_len,
-                v_row_len,
+            Err(Vec2dError::DifferentRowLengths {
+                top_row_len,
+                bot_row_len,
             })
         }
     }
-}
 
-/// Returns vector of collumns
-impl<T> From<Vec2d<T>> for Vec<Vec<T>> {
-    fn from(vec2d: Vec2d<T>) -> Self {
-        vec2d
-            .into_cols()
-            .map(|col_iterator| col_iterator.collect::<Vec<_>>())
-            .collect::<Vec<_>>()
+    /// Creates a 2d vector
+    /// --------------------
+    /// |left_top|right_top|
+    /// --------------------
+    /// |left_bot|right_bot|
+    /// --------------------
+    /// whenever it is possible.
+    pub fn merge(
+        top_left: Self,
+        top_right: Self,
+        bot_left: Self,
+        bot_right: Self,
+    ) -> Result<Self, Vec2dError> {
+        let left = Self::merge_vertically(top_left, bot_left)?;
+        let right = Self::merge_vertically(top_right, bot_right)?;
+        Self::merge_horizontally(left, right)
     }
 }
 
@@ -271,8 +289,7 @@ mod test {
     #[test]
     fn from_cols_vec() {
         let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_cols_vec(vec)
-            .expect("This should be well-defined");
+        let vec2d = Vec2d::from_cols_vec(vec).expect("This should be well-defined");
         assert_eq!(vec2d.shape(), (3, 2));
         assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
     }
@@ -288,12 +305,16 @@ mod test {
     }
 
     #[test]
-    fn from_cols_wrong_col_lens() {
-        let wrong_col_lens_vec = vec![vec![1, 2, 3], vec![4, 5]];
-        let wrong_col_lens_vec2d =
-            Vec2d::from_cols(wrong_col_lens_vec.into_iter().map(|col| col.into_iter()));
+    fn from_cols_different_col_lens() {
+        let different_col_lens_vec = vec![vec![1, 2, 3], vec![4, 5]];
+        let different_col_lens_vec2d = Vec2d::from_cols(
+            different_col_lens_vec
+                .into_iter()
+                .map(|col| col.into_iter()),
+        );
         assert_eq!(
-            wrong_col_lens_vec2d.expect_err("This should be non-empty but have wrong col lens."),
+            different_col_lens_vec2d
+                .expect_err("This should be non-empty but have different col lens."),
             Vec2dError::DifferentLengthsColsIterator
         );
     }
@@ -315,7 +336,6 @@ mod test {
         assert_eq!(vec2d.shape(), (3, 2));
         assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
     }
-
 
     #[test]
     fn transpose_1() {
@@ -348,8 +368,7 @@ mod test {
     #[test]
     fn from_rows_vec() {
         let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_rows_vec(vec)
-            .expect("This should be well-defined");
+        let vec2d = Vec2d::from_rows_vec(vec).expect("This should be well-defined");
         assert_eq!(vec2d.shape(), (2, 3));
         assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
     }
@@ -365,12 +384,16 @@ mod test {
     }
 
     #[test]
-    fn from_rows_wrong_row_lens() {
-        let wrong_row_lens_vec = vec![vec![1, 2, 3], vec![4, 5]];
-        let wrong_row_lens_vec2d =
-            Vec2d::from_rows(wrong_row_lens_vec.into_iter().map(|row| row.into_iter()));
+    fn from_rows_different_row_lens() {
+        let different_row_lens_vec = vec![vec![1, 2, 3], vec![4, 5]];
+        let different_row_lens_vec2d = Vec2d::from_rows(
+            different_row_lens_vec
+                .into_iter()
+                .map(|row| row.into_iter()),
+        );
         assert_eq!(
-            wrong_row_lens_vec2d.expect_err("This should be non-empty but have wrong row lens."),
+            different_row_lens_vec2d
+                .expect_err("This should be non-empty but have different row lens."),
             Vec2dError::DifferentLengthsRowsIterator
         );
     }
@@ -394,27 +417,86 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn merge_horizontally() {
-        todo!()
+        let vec2d_1 = Vec2d::from_cols_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
+            .expect("This should be well-defined.");
+        let vec2d_2 =
+            Vec2d::from_cols_vec(vec![vec![7, 8, 9]]).expect("This should be well-defined.");
+        let vec2d =
+            Vec2d::merge_horizontally(vec2d_1, vec2d_2).expect("The merge should be well-defined.");
+
+        assert_eq!(vec2d.shape(), (3, 3));
+        assert_eq!(vec2d.buffer, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
     }
 
     #[test]
-    #[ignore]
-    fn merge_horizontally_wrong_col_lens() {
-        todo!()
+    fn merge_horizontally_different_col_lens() {
+        let u = Vec2d::from_cols_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
+            .expect("This should be well-defined.");
+        let v =
+            Vec2d::from_cols_vec(vec![vec![7, 8, 9, 10]]).expect("This should be well-defined.");
+        let vec = Vec2d::merge_horizontally(u.clone(), v.clone());
+        assert_eq!(
+            vec.expect_err("This should fail."),
+            Vec2dError::DifferentColLengths {
+                left_col_len: u.col_len(),
+                right_col_len: v.col_len()
+            }
+        );
     }
 
     #[test]
-    #[ignore]
     fn merge_vertically() {
-        todo!()
+        let u = Vec2d::from_rows_vec(vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']])
+            .expect("This should be well-defined.");
+        let v =
+            Vec2d::from_rows_vec(vec![vec!['g', 'h', 'i']]).expect("This should be well-defined.");
+
+        let vec = Vec2d::merge_vertically(u, v).expect("The merge should be well-defined.");
+
+        assert_eq!(vec.shape(), (3, 3));
+        assert_eq!(
+            vec.buffer,
+            vec!['a', 'd', 'g', 'b', 'e', 'h', 'c', 'f', 'i']
+        );
     }
 
     #[test]
-    #[ignore]
-    fn merge_vertically_wrong_row_lens() {
-        todo!()
+    fn merge_vertically_different_row_lens() {
+        let u = Vec2d::from_rows_vec(vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']])
+            .expect("This should be well-defined.");
+        let v = Vec2d::from_rows_vec(vec![vec!['g', 'h', 'i', 'j']])
+            .expect("This should be well-defined.");
+
+        let vec = Vec2d::merge_vertically(u.clone(), v.clone());
+
+        assert_eq!(
+            vec.expect_err("This should fail."),
+            Vec2dError::DifferentRowLengths {
+                top_row_len: u.row_len(),
+                bot_row_len: v.row_len()
+            }
+        )
+    }
+
+    #[test]
+    fn merge() {
+        let top_left =
+            Vec2d::from_cols_vec(vec![vec![1, 2, 3]]).expect("This should be well-defined.");
+        let top_right = Vec2d::from_cols_vec(vec![
+            vec![5, 6, 7],
+            vec![9, 10, 11],
+            vec![13, 14, 15],
+            vec![17, 18, 19],
+        ])
+        .expect("This should be well-defined.");
+        let bot_left = Vec2d::from_cols_vec(vec![vec![4]]).expect("This should be well-defined.");
+        let bot_right =
+            Vec2d::from_rows_vec(vec![vec![8, 12, 16, 20]]).expect("This should be well-defined.");
+
+        let vec = Vec2d::merge(top_left, top_right, bot_left, bot_right)
+            .expect("The merge should be well-defined.");
+        assert_eq!(vec.buffer, (1..=20).collect::<Vec<_>>());
     }
 
     #[test]
@@ -443,25 +525,7 @@ mod test {
 
     #[test]
     #[ignore]
-    fn merge() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
     fn split() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn into_vec_vec_t() {
-        todo!()
-    }
-
-    #[test]
-    #[ignore]
-    fn from_vec_vec_t() {
         todo!()
     }
 }
