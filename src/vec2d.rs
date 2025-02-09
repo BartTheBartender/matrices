@@ -5,10 +5,10 @@ use std::{fmt, mem};
 custom_error! {
     #[derive(PartialEq, Eq)]
     pub Vec2dError
-    ColIteratorLen = "Cols in the iterator had different lengths.",
-    RowIteratorLen = "Rows in the iterator had different lengths.",
-    NoColsIterator = "Iterator of cols was empty.",
-    NoRowsIterator = "Iterator of rows was empty.",
+    DifferentLengthsColsIterator = "Cols in the iterator had different lengths.",
+    DifferentLengthsRowsIterator = "Rows in the iterator had different lengths.",
+    EmptyColsIterator = "Iterator of cols was empty.",
+    EmptyRowsIterator = "Iterator of rows was empty.",
     DifferentColLens{u_col_len: usize, v_col_len: usize} = "Different col_lens (u.col_len() = {u_col_len}, v.col_len() = {v_col_len}).",
     DifferentRowLens{u_row_len: usize, v_row_len: usize} = "Different row_lens (u.row_len() = {u_row_len}, v.row_len() = {v_row_len}).",
     ColIdxOutOfBounds{col_idx: usize, col_len: usize} = "Col_idx ({col_idx}) out of bound col_len ({col_len}).",
@@ -104,7 +104,7 @@ impl<T> Vec2d<T> {
             match nof_rows {
                 Some(nof_rows) => {
                     if nof_rows != new_len - old_len {
-                        return Err(Vec2dError::ColIteratorLen);
+                        return Err(Vec2dError::DifferentLengthsColsIterator);
                     }
                 }
                 None => nof_rows = Some(new_len),
@@ -113,12 +113,16 @@ impl<T> Vec2d<T> {
         }
 
         nof_rows
-            .ok_or(Vec2dError::NoColsIterator)
+            .ok_or(Vec2dError::EmptyColsIterator)
             .map(|nof_rows| Self {
                 buffer,
                 nof_rows,
                 nof_cols: new_len / nof_rows,
             })
+    }
+
+    pub fn from_cols_vec(cols_vec: Vec<Vec<T>>) -> Result<Self, Vec2dError> {
+        Self::from_cols(cols_vec.into_iter().map(|col| col.into_iter()))
     }
 
     pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
@@ -143,10 +147,14 @@ impl<T> Vec2d<T> {
                 self_transposed
             })
             .map_err(|error| match error {
-                Vec2dError::ColIteratorLen => Vec2dError::RowIteratorLen,
-                Vec2dError::NoColsIterator => Vec2dError::NoRowsIterator,
+                Vec2dError::DifferentLengthsColsIterator => Vec2dError::DifferentLengthsRowsIterator,
+                Vec2dError::EmptyColsIterator => Vec2dError::EmptyRowsIterator,
                 _ => Vec2dError::Unexpected,
             })
+    }
+
+    pub fn from_rows_vec(rows_vec: Vec<Vec<T>>) -> Result<Self, Vec2dError> {
+        Self::from_rows(rows_vec.into_iter().map(|row| row.into_iter()))
     }
 
     /// Merging horizontally and vertically.
@@ -261,12 +269,21 @@ mod test {
     }
 
     #[test]
+    fn from_cols_vec() {
+        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
+        let vec2d = Vec2d::from_cols_vec(vec)
+            .expect("This should be well-defined");
+        assert_eq!(vec2d.shape(), (3, 2));
+        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+    }
+
+    #[test]
     fn from_cols_empty_iterator() {
         let empty_vec: Vec<Vec<u8>> = vec![];
         let empty_vec2d = Vec2d::from_cols(empty_vec.into_iter().map(|col| col.into_iter()));
         assert_eq!(
             empty_vec2d.expect_err("This should be empty 2d vector"),
-            Vec2dError::NoColsIterator
+            Vec2dError::EmptyColsIterator
         );
     }
 
@@ -277,7 +294,7 @@ mod test {
             Vec2d::from_cols(wrong_col_lens_vec.into_iter().map(|col| col.into_iter()));
         assert_eq!(
             wrong_col_lens_vec2d.expect_err("This should be non-empty but have wrong col lens."),
-            Vec2dError::ColIteratorLen
+            Vec2dError::DifferentLengthsColsIterator
         );
     }
 
@@ -298,6 +315,7 @@ mod test {
         assert_eq!(vec2d.shape(), (3, 2));
         assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
     }
+
 
     #[test]
     fn transpose_1() {
@@ -328,13 +346,21 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    fn from_rows_vec() {
+        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
+        let vec2d = Vec2d::from_rows_vec(vec)
+            .expect("This should be well-defined");
+        assert_eq!(vec2d.shape(), (2, 3));
+        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+    }
+
+    #[test]
     fn from_rows_empty_iterator() {
         let empty_vec: Vec<Vec<u8>> = vec![];
         let empty_vec2d = Vec2d::from_rows(empty_vec.into_iter().map(|row| row.into_iter()));
         assert_eq!(
             empty_vec2d.expect_err("This should be empty 2d vector"),
-            Vec2dError::NoRowsIterator
+            Vec2dError::EmptyRowsIterator
         );
     }
 
@@ -345,7 +371,7 @@ mod test {
             Vec2d::from_rows(wrong_row_lens_vec.into_iter().map(|row| row.into_iter()));
         assert_eq!(
             wrong_row_lens_vec2d.expect_err("This should be non-empty but have wrong row lens."),
-            Vec2dError::RowIteratorLen
+            Vec2dError::DifferentLengthsRowsIterator
         );
     }
 
