@@ -19,9 +19,9 @@ custom_error! {
 /// Struct representing 2d vector, optimized for collumn operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vec2d<T> {
-    buffer: Vec<T>,
-    nof_rows: usize,
-    nof_cols: usize,
+    pub(super) buffer: Vec<T>,
+    pub(super) nof_rows: usize,
+    pub(super) nof_cols: usize,
 }
 
 impl<T> Vec2d<T> {
@@ -43,6 +43,10 @@ impl<T> Vec2d<T> {
 
     pub const fn shape(&self) -> (usize, usize) {
         (self.nof_rows(), self.nof_cols())
+    }
+
+    pub const fn is_square(&self) -> bool {
+        self.nof_cols() == self.nof_rows()
     }
 
     /// Transposes the 2d vector. Unfortunately not in place.
@@ -68,11 +72,42 @@ impl<T> Vec2d<T> {
             .for_each(|(value, idx)| self.buffer[idx] = value);
     }
 
+    /// The caller must guaranttee that col_idx < self.nof_cols()
+    pub unsafe fn col_unchecked(&self, col_idx: usize) -> impl Iterator<Item = &T> {
+        let begin = col_idx * self.col_len();
+        let end = begin + self.col_len();
+        self.buffer[begin..end].iter()
+    }
+
+    /// The caller must guaranttee that col_idx < self.nof_cols()
+    pub unsafe fn col_mut_unchecked(&mut self, col_idx: usize) -> impl Iterator<Item = &mut T> {
+        let begin = col_idx * self.col_len();
+        let end = begin + self.col_len();
+        self.buffer[begin..end].iter_mut()
+    }
+
+    pub fn col(&self, col_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
+        (col_idx < self.nof_cols())
+            .then(|| unsafe { self.col_unchecked(col_idx) })
+            .ok_or(Vec2dError::RowIdxOutOfBounds {
+                row_idx: col_idx,
+                row_len: self.nof_cols(),
+            })
+    }
+
+    pub fn col_mut(&mut self, col_idx: usize) -> Result<impl Iterator<Item = &mut T>, Vec2dError> {
+        let nof_cols = self.nof_cols();
+        (col_idx < nof_cols)
+            .then(|| unsafe { self.col_mut_unchecked(col_idx) })
+            .ok_or(Vec2dError::RowIdxOutOfBounds {
+                row_idx: col_idx,
+                row_len: nof_cols,
+            })
+    }
+
     /// Collumn iterator, borrowing the 2d vec
     pub fn cols(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
-        (0..self.nof_cols())
-            .map(|col_idx| col_idx * self.col_len())
-            .map(|col_idx| self.buffer[col_idx..col_idx + self.col_len()].iter())
+        (0..self.nof_cols()).map(|col_idx| unsafe { self.col_unchecked(col_idx) })
     }
 
     //Collumn  iterator, taking ownership of the 2d vec
@@ -125,12 +160,52 @@ impl<T> Vec2d<T> {
         Self::from_cols(cols_vec.into_iter().map(|col| col.into_iter()))
     }
 
-    pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
-        (0..self.nof_rows())
-            .map(move |row_idx| {
-                (0..self.nof_cols()).map(move |col_idx| col_idx * self.col_len() + row_idx)
+    pub fn into_cols_vec(self) -> Vec<Vec<T>> {
+        self.into_cols()
+            .map(|col_iterator| col_iterator.collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    }
+
+    /// The caller must guaranttee that row_idx < self.nof_rows()
+    pub unsafe fn row_unchecked(&self, row_idx: usize) -> impl Iterator<Item = &T> {
+        (0..self.row_len())
+            .map(move |idx| self.col_len() * idx + row_idx)
+            .map(|idx| self.buffer.get_unchecked(idx))
+    }
+
+    /// The caller must guaranttee that row_idx < self.nof_rows()
+    pub unsafe fn row_mut_unchecked(&mut self, row_idx: usize) -> impl Iterator<Item = &mut T> {
+        let row_len = self.row_len();
+        let col_len = self.col_len();
+
+        let buffer_ptr = self.buffer.as_mut_ptr();
+
+        (0..row_len)
+            .map(move |idx| col_len * idx + row_idx)
+            .map(move |idx| &mut *buffer_ptr.add(idx))
+    }
+
+    pub fn row(&self, row_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
+        (row_idx < self.nof_rows())
+            .then(|| unsafe { self.row_unchecked(row_idx) })
+            .ok_or(Vec2dError::ColIdxOutOfBounds {
+                col_idx: row_idx,
+                col_len: self.nof_rows(),
             })
-            .map(|curr_row_ids| curr_row_ids.map(|idx| &self.buffer[idx]))
+    }
+
+    pub fn row_mut(&mut self, row_idx: usize) -> Result<impl Iterator<Item = &mut T>, Vec2dError> {
+        let nof_rows = self.nof_rows();
+        (row_idx < nof_rows)
+            .then(|| unsafe { self.row_mut_unchecked(row_idx) })
+            .ok_or(Vec2dError::ColIdxOutOfBounds {
+                col_idx: row_idx,
+                col_len: nof_rows,
+            })
+    }
+
+    pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
+        (0..self.nof_rows()).map(move |row_idx| unsafe { self.row_unchecked(row_idx) })
     }
 
     pub fn into_rows(mut self) -> impl Iterator<Item = impl Iterator<Item = T>> {
@@ -159,12 +234,18 @@ impl<T> Vec2d<T> {
         Self::from_rows(rows_vec.into_iter().map(|row| row.into_iter()))
     }
 
+    pub fn into_rows_vec(self) -> Vec<Vec<T>> {
+        self.into_rows()
+            .map(|row_iterator| row_iterator.collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    }
+
     /// Given 2d vectors left and right, create the 2d vector
     /// ------------
     /// |left|right|
     /// ------------
     /// The caller must ensure that left and right have the same col_len
-    fn merge_horizontally_unchecked(left: Self, mut right: Self) -> Self {
+    pub unsafe fn merge_horizontally_unchecked(left: Self, mut right: Self) -> Self {
         let left_nof_cols = left.nof_cols();
         let mut buffer = left.buffer;
         buffer.append(&mut right.buffer);
@@ -183,7 +264,7 @@ impl<T> Vec2d<T> {
         let left_col_len = left.col_len();
         let right_col_len = right.col_len();
         (left_col_len == right_col_len)
-            .then(|| Self::merge_horizontally_unchecked(left, right))
+            .then(|| unsafe { Self::merge_horizontally_unchecked(left, right) })
             .ok_or(Vec2dError::DifferentColLengths {
                 left_col_len,
                 right_col_len,
@@ -203,7 +284,7 @@ impl<T> Vec2d<T> {
             .then(|| {
                 top.transpose();
                 bot.transpose();
-                let mut transposed = Self::merge_horizontally_unchecked(top, bot);
+                let mut transposed = unsafe { Self::merge_horizontally_unchecked(top, bot) };
 
                 transposed.transpose();
                 transposed
@@ -238,7 +319,7 @@ impl<T> Vec2d<T> {
     /// ------   ------------
     /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
     /// The caller must ensure that col_idx in 1..self.nof_cols()
-    fn split_horizontally_unchecked(self, col_idx: usize) -> (Self, Self) {
+    pub unsafe fn split_horizontally_unchecked(self, col_idx: usize) -> (Self, Self) {
         let nof_rows = self.nof_rows();
         let nof_cols = self.nof_cols();
 
@@ -268,7 +349,7 @@ impl<T> Vec2d<T> {
     pub fn split_horizontally(self, col_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let col_len = self.col_len();
         (0 < col_idx && col_idx < self.nof_cols())
-            .then(|| self.split_horizontally_unchecked(col_idx))
+            .then(|| unsafe { self.split_horizontally_unchecked(col_idx) })
             .ok_or(Vec2dError::ColIdxOutOfBounds { col_idx, col_len })
     }
 
@@ -285,7 +366,7 @@ impl<T> Vec2d<T> {
         (0 < row_idx && row_idx < self.nof_rows())
             .then(|| {
                 self.transpose();
-                let (mut top, mut bot) = self.split_horizontally_unchecked(row_idx);
+                let (mut top, mut bot) = unsafe { self.split_horizontally_unchecked(row_idx) };
                 top.transpose();
                 bot.transpose();
                 (top, bot)
@@ -497,21 +578,53 @@ mod test {
     }
 
     #[test]
-    fn cols() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_cols(vec.clone().into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (3, 2));
-        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+    fn col() {
+        let vec = Vec2d::from_cols_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
+            .expect("This should be well-defined.");
+        assert_eq!(
+            vec.col(0)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![1, 1]
+        );
+        assert_eq!(
+            vec.col(3)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![0, 0]
+        );
+        assert_eq!(
+            unsafe { vec.col(7).unwrap_err_unchecked() },
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 7,
+                row_len: vec.row_len()
+            }
+        );
     }
 
     #[test]
-    fn into_cols() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_cols(vec.into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (3, 2));
-        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+    fn col_mut() {
+        let mut vec = Vec2d::from_cols_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![4, 4]])
+            .expect("This should be well-defined.");
+        let mut vec1 = vec.clone();
+
+        vec.col_mut(0)
+            .expect("This should be well-defined.")
+            .for_each(|x| (*x) *= 10);
+        assert_eq!(
+            vec.into_cols_vec(),
+            vec![vec![10, 10], vec![2, 2], vec![3, 3], vec![4, 4]]
+        );
+
+        assert_eq!(
+            unsafe { vec1.col_mut(8).unwrap_err_unchecked() },
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 8,
+                row_len: 4
+            }
+        );
     }
 
     #[test]
@@ -576,21 +689,53 @@ mod test {
     }
 
     #[test]
-    fn rows() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_rows(vec.clone().into_iter().map(|row| row.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (2, 3));
-        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+    fn row() {
+        let vec = Vec2d::from_rows_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
+            .expect("This should be well-defined.");
+        assert_eq!(
+            vec.row(0)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![1, 1]
+        );
+        assert_eq!(
+            vec.row(3)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![0, 0]
+        );
+        assert_eq!(
+            unsafe { vec.row(7).unwrap_err_unchecked() },
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 7,
+                col_len: vec.col_len()
+            }
+        );
     }
 
     #[test]
-    fn into_rows() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_rows(vec.into_iter().map(|row| row.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (2, 3));
-        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+    fn row_mut() {
+        let mut vec = Vec2d::from_rows_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![4, 4]])
+            .expect("This should be well-defined.");
+        let mut vec1 = vec.clone();
+
+        vec.row_mut(0)
+            .expect("This should be well-defined.")
+            .for_each(|x| (*x) *= 10);
+        assert_eq!(
+            vec.into_rows_vec(),
+            vec![vec![10, 10], vec![2, 2], vec![3, 3], vec![4, 4]]
+        );
+
+        assert_eq!(
+            unsafe { vec1.row_mut(8).unwrap_err_unchecked() },
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 8,
+                col_len: 4
+            }
+        );
     }
 
     #[test]
