@@ -25,8 +25,12 @@ impl PID for Integer {
             }
         }
 
-        let (gcd, x, y) = gcd_helper(a,b);
-        (gcd * Integer::signum(gcd), x * Integer::signum(gcd), y * Integer::signum(gcd))
+        let (gcd, x, y) = gcd_helper(a, b);
+        (
+            gcd * Integer::signum(gcd),
+            x * Integer::signum(gcd),
+            y * Integer::signum(gcd),
+        )
     }
 }
 
@@ -41,5 +45,21 @@ mod test {
     #[test]
     fn gcd_negative() {
         assert_eq!(Integer::gcd(-2, -3), (1, 1, -1));
+    }
+
+    #[test]
+    fn dot_product_1() {
+        assert_eq!(
+            Integer::dot_product(vec![1, 2, 3].into_iter(), vec![3, 2, 1].into_iter()),
+            10
+        );
+    }
+
+    #[test]
+    fn dot_product_2() {
+        assert_eq!(
+            Integer::dot_product(vec![1, 2, 3].into_iter(), vec![3, 2, 1].into_iter()),
+            10
+        );
     }
 }

@@ -19,9 +19,9 @@ custom_error! {
 /// Struct representing 2d vector, optimized for collumn operations.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Vec2d<T> {
-    buffer: Vec<T>,
-    nof_rows: usize,
-    nof_cols: usize,
+    pub(super) buffer: Vec<T>,
+    pub(super) nof_rows: usize,
+    pub(super) nof_cols: usize,
 }
 
 impl<T> Vec2d<T> {
@@ -68,11 +68,25 @@ impl<T> Vec2d<T> {
             .for_each(|(value, idx)| self.buffer[idx] = value);
     }
 
+    /// The caller must guaranttee that col_idx < self.nof_cols()
+    pub fn col_unchecked(&self, col_idx: usize) -> impl Iterator<Item = &T> {
+        let begin = col_idx * self.col_len();
+        let end = begin + self.col_len();
+        self.buffer[begin..end].iter()
+    }
+
+    pub fn col(&self, col_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
+        (col_idx < self.nof_cols())
+            .then(|| self.col_unchecked(col_idx))
+            .ok_or(Vec2dError::RowIdxOutOfBounds {
+                row_idx: col_idx,
+                row_len: self.nof_cols(),
+            })
+    }
+
     /// Collumn iterator, borrowing the 2d vec
     pub fn cols(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
-        (0..self.nof_cols())
-            .map(|col_idx| col_idx * self.col_len())
-            .map(|col_idx| self.buffer[col_idx..col_idx + self.col_len()].iter())
+        (0..self.nof_cols()).map(|col_idx| self.col_unchecked(col_idx))
     }
 
     //Collumn  iterator, taking ownership of the 2d vec
@@ -125,12 +139,30 @@ impl<T> Vec2d<T> {
         Self::from_cols(cols_vec.into_iter().map(|col| col.into_iter()))
     }
 
-    pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
-        (0..self.nof_rows())
-            .map(move |row_idx| {
-                (0..self.nof_cols()).map(move |col_idx| col_idx * self.col_len() + row_idx)
+    pub fn into_cols_vec(self) -> Vec<Vec<T>> {
+        self.into_cols()
+            .map(|col_iterator| col_iterator.collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    }
+
+    /// The caller must guaranttee that row_idx < self.nof_rows()
+    pub fn row_unchecked(&self, row_idx: usize) -> impl Iterator<Item = &T> {
+        (0..self.row_len())
+            .map(move |idx| self.col_len() * idx + row_idx)
+            .map(|idx| unsafe { self.buffer.get_unchecked(idx) })
+    }
+
+    pub fn row(&self, row_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
+        (row_idx < self.nof_rows())
+            .then(|| self.row_unchecked(row_idx))
+            .ok_or(Vec2dError::ColIdxOutOfBounds {
+                col_idx: row_idx,
+                col_len: self.nof_rows(),
             })
-            .map(|curr_row_ids| curr_row_ids.map(|idx| &self.buffer[idx]))
+    }
+
+    pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
+        (0..self.nof_rows()).map(move |row_idx| self.row_unchecked(row_idx))
     }
 
     pub fn into_rows(mut self) -> impl Iterator<Item = impl Iterator<Item = T>> {
@@ -157,6 +189,12 @@ impl<T> Vec2d<T> {
 
     pub fn from_rows_vec(rows_vec: Vec<Vec<T>>) -> Result<Self, Vec2dError> {
         Self::from_rows(rows_vec.into_iter().map(|row| row.into_iter()))
+    }
+
+    pub fn into_rows_vec(self) -> Vec<Vec<T>> {
+        self.into_rows()
+            .map(|row_iterator| row_iterator.collect::<Vec<_>>())
+            .collect::<Vec<_>>()
     }
 
     /// Given 2d vectors left and right, create the 2d vector
@@ -497,21 +535,30 @@ mod test {
     }
 
     #[test]
-    fn cols() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_cols(vec.clone().into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (3, 2));
-        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
-    }
-
-    #[test]
-    fn into_cols() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_cols(vec.into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (3, 2));
-        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+    fn col() {
+        let vec = Vec2d::from_cols_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
+            .expect("This should be well-defined.");
+        assert_eq!(
+            vec.col(0)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![1, 1]
+        );
+        assert_eq!(
+            vec.col(3)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![0, 0]
+        );
+        assert_eq!(
+            unsafe { vec.col(7).unwrap_err_unchecked() },
+            Vec2dError::RowIdxOutOfBounds {
+                row_idx: 7,
+                row_len: vec.row_len()
+            }
+        );
     }
 
     #[test]
@@ -576,21 +623,30 @@ mod test {
     }
 
     #[test]
-    fn rows() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_rows(vec.clone().into_iter().map(|row| row.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (2, 3));
-        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
-    }
-
-    #[test]
-    fn into_rows() {
-        let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let vec2d = Vec2d::from_rows(vec.into_iter().map(|row| row.into_iter()))
-            .expect("This should be well-defined");
-        assert_eq!(vec2d.shape(), (2, 3));
-        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+    fn row() {
+        let vec = Vec2d::from_rows_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
+            .expect("This should be well-defined.");
+        assert_eq!(
+            vec.row(0)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![1, 1]
+        );
+        assert_eq!(
+            vec.row(3)
+                .expect("This should be well-defined.")
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![0, 0]
+        );
+        assert_eq!(
+            unsafe { vec.row(7).unwrap_err_unchecked() },
+            Vec2dError::ColIdxOutOfBounds {
+                col_idx: 7,
+                col_len: vec.col_len()
+            }
+        );
     }
 
     #[test]

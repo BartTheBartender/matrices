@@ -10,6 +10,9 @@
 however, a bug inside it prevents using type aliases for other types
 */
 #![feature(lazy_type_alias)]
+#![feature(anonymous_lifetime_in_impl_trait)]
+#![feature(unwrap_infallible)]
+#![feature(iter_collect_into)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -96,7 +99,7 @@ however, a bug inside it prevents using type aliases for other types
 /* clippy end */
 
 pub mod ring;
-pub mod vec2d;
+pub mod matrix;
 
 fn main() {
 }
