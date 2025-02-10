@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]  # Runs on every branch
   pull_request:
-    branches: [ "main" ]
+    branches: [ "**" ]  # Runs for PRs on every branch
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,6 +16,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Install Rust nightly
+      run: |
+        rustup update nightly
+        rustup default nightly
     - name: Build
       run: cargo build --verbose
     - name: Run tests
