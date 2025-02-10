@@ -15,6 +15,34 @@ impl<R: Ring> Matrix<R> {
             buffer: vec![R::zero(); nof_cols * nof_rows],
         }
     }
+
+    pub fn is_lower_triangular(&self) -> bool {
+        self.is_square()
+            && (0..self.nof_cols())
+                .map(|col_idx| {
+                    self.col(col_idx)
+                        .expect("This should be well-defined.")
+                        .take(col_idx)
+                })
+                .flatten()
+                .all(|&entry| entry == R::zero())
+    }
+
+    pub fn is_upper_triangular(&self) -> bool {
+        self.is_square()
+            && (0..self.nof_cols())
+                .map(|col_idx| {
+                    self.col(col_idx)
+                        .expect("This should be well-defined.")
+                        .skip(col_idx + 1)
+                })
+                .flatten()
+                .all(|&entry| entry == R::zero())
+    }
+
+    pub fn is_diagonal(&self) -> bool {
+        self.is_lower_triangular() && self.is_upper_triangular()
+    }
 }
 
 /// Addition
@@ -293,7 +321,6 @@ mod test {
             .expect("This should be well-defined.");
         let b = M::from_rows_vec(vec![vec![3, 2, 1, 17], vec![6, 5, 4, 13]])
             .expect("This should be well-defined.");
-
 
         let _ = a * b;
     }
