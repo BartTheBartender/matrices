@@ -1,9 +1,17 @@
 mod vec2d;
 
 use crate::ring::Ring;
+use custom_error::custom_error;
 use itertools::iproduct;
 use std::ops::{Add, Mul, Neg, Sub};
-use vec2d::Vec2d;
+use vec2d::{Vec2d, Vec2dError};
+
+custom_error! {
+    pub MatrixError
+    Vec2d{vec_2d_error: Vec2dError} = "Error of the underlying Vec2d: {vec_2d_error}.",
+    AddedRowToItself{idx: usize} = "Trying to add row {idx} to itself.",
+    AddedColToItself{idx: usize} = "Trying to add col {idx} to itself.",
+}
 
 pub type Matrix<R: Ring> = Vec2d<R>;
 
@@ -16,32 +24,238 @@ impl<R: Ring> Matrix<R> {
         }
     }
 
-    pub fn is_lower_triangular(&self) -> bool {
-        self.is_square()
-            && (0..self.nof_cols())
-                .map(|col_idx| {
-                    self.col(col_idx)
-                        .expect("This should be well-defined.")
-                        .take(col_idx)
-                })
-                .flatten()
-                .all(|&entry| entry == R::zero())
+    pub fn mul_col_by(&mut self, col_idx: usize, r: R) -> Result<(), MatrixError> {
+        self.col_mut(col_idx)
+            .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+            .map(|col_mut| col_mut.for_each(|entry| *entry = *entry * r))
     }
 
-    pub fn is_upper_triangular(&self) -> bool {
-        self.is_square()
-            && (0..self.nof_cols())
-                .map(|col_idx| {
-                    self.col(col_idx)
-                        .expect("This should be well-defined.")
-                        .skip(col_idx + 1)
-                })
-                .flatten()
-                .all(|&entry| entry == R::zero())
+    pub fn mul_row_by(&mut self, row_idx: usize, r: R) -> Result<(), MatrixError> {
+        self.row_mut(row_idx)
+            .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+            .map(|row_mut| row_mut.for_each(|entry| *entry = *entry * r))
     }
 
-    pub fn is_diagonal(&self) -> bool {
-        self.is_lower_triangular() && self.is_upper_triangular()
+    pub fn add_col_to_col(
+        &mut self,
+        col_idx_1: usize,
+        col_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (col_idx_1 != col_idx_2)
+            .then(|| {
+                let col_1 = self
+                    .col(col_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|col_1| col_1.copied().collect::<Vec<_>>().into_iter())?;
+
+                let col_2 = self
+                    .col_mut(col_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(col_2.zip(col_1).for_each(|(col_2_entry, col_1_entry)| {
+                    *col_2_entry = *col_2_entry + col_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedColToItself { idx: col_idx_1 })
+            .flatten()
+    }
+
+    pub fn add_muled_col_to_col(
+        &mut self,
+        r: R,
+        col_idx_1: usize,
+        col_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (col_idx_1 != col_idx_2)
+            .then(|| {
+                let col_1 = self
+                    .col(col_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|col_1| {
+                        col_1
+                            .copied()
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .map(|col_1_entry| col_1_entry * r)
+                    })?;
+
+                let col_2 = self
+                    .col_mut(col_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(col_2.zip(col_1).for_each(|(col_2_entry, col_1_entry)| {
+                    *col_2_entry = *col_2_entry + col_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedColToItself { idx: col_idx_1 })
+            .flatten()
+    }
+
+    pub fn add_row_to_row(
+        &mut self,
+        row_idx_1: usize,
+        row_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (row_idx_1 != row_idx_2)
+            .then(|| {
+                let row_1 = self
+                    .row(row_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|row_1| row_1.copied().collect::<Vec<_>>().into_iter())?;
+
+                let row_2 = self
+                    .row_mut(row_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(row_2.zip(row_1).for_each(|(row_2_entry, row_1_entry)| {
+                    *row_2_entry = *row_2_entry + row_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
+            .flatten()
+    }
+
+    pub fn add_muled_row_to_row(
+        &mut self,
+        r: R,
+        row_idx_1: usize,
+        row_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (row_idx_1 != row_idx_2)
+            .then(|| {
+                let row_1 = self
+                    .row(row_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|row_1| {
+                        row_1
+                            .copied()
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .map(|row_1_entry| row_1_entry * r)
+                    })?;
+
+                let row_2 = self
+                    .row_mut(row_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(row_2.zip(row_1).for_each(|(row_2_entry, row_1_entry)| {
+                    *row_2_entry = *row_2_entry + row_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
+            .flatten()
+    }
+
+    /////////
+
+    pub fn sub_col_from_col(
+        &mut self,
+        col_idx_1: usize,
+        col_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (col_idx_1 != col_idx_2)
+            .then(|| {
+                let col_1 = self
+                    .col(col_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|col_1| col_1.copied().collect::<Vec<_>>().into_iter())?;
+
+                let col_2 = self
+                    .col_mut(col_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(col_2.zip(col_1).for_each(|(col_2_entry, col_1_entry)| {
+                    *col_2_entry = *col_2_entry - col_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedColToItself { idx: col_idx_1 })
+            .flatten()
+    }
+
+    pub fn sub_muled_col_from_col(
+        &mut self,
+        r: R,
+        col_idx_1: usize,
+        col_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (col_idx_1 != col_idx_2)
+            .then(|| {
+                let col_1 = self
+                    .col(col_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|col_1| {
+                        col_1
+                            .copied()
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .map(|col_1_entry| col_1_entry * r)
+                    })?;
+
+                let col_2 = self
+                    .col_mut(col_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(col_2.zip(col_1).for_each(|(col_2_entry, col_1_entry)| {
+                    *col_2_entry = *col_2_entry - col_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedColToItself { idx: col_idx_1 })
+            .flatten()
+    }
+
+    pub fn sub_row_from_row(
+        &mut self,
+        row_idx_1: usize,
+        row_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (row_idx_1 != row_idx_2)
+            .then(|| {
+                let row_1 = self
+                    .row(row_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|row_1| row_1.copied().collect::<Vec<_>>().into_iter())?;
+
+                let row_2 = self
+                    .row_mut(row_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(row_2.zip(row_1).for_each(|(row_2_entry, row_1_entry)| {
+                    *row_2_entry = *row_2_entry - row_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
+            .flatten()
+    }
+
+    pub fn sub_muled_row_from_row(
+        &mut self,
+        r: R,
+        row_idx_1: usize,
+        row_idx_2: usize,
+    ) -> Result<(), MatrixError> {
+        (row_idx_1 != row_idx_2)
+            .then(|| {
+                let row_1 = self
+                    .row(row_idx_1)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })
+                    .map(|row_1| {
+                        row_1
+                            .copied()
+                            .collect::<Vec<_>>()
+                            .into_iter()
+                            .map(|row_1_entry| row_1_entry * r)
+                    })?;
+
+                let row_2 = self
+                    .row_mut(row_idx_2)
+                    .map_err(|vec_2d_error| MatrixError::Vec2d { vec_2d_error })?;
+
+                Ok(row_2.zip(row_1).for_each(|(row_2_entry, row_1_entry)| {
+                    *row_2_entry = *row_2_entry - row_1_entry
+                }))
+            })
+            .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
+            .flatten()
     }
 }
 
@@ -324,4 +538,119 @@ mod test {
 
         let _ = a * b;
     }
+
+    #[test]
+    fn add_col_to_col() {
+        let mut matrix =
+            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .add_col_to_col(0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_rows_vec(),
+            vec![vec![1, 2, 4, 4], vec![2, 4, 8, 8], vec![3, 6, 12, 12]]
+        );
+    }
+
+    #[test]
+    fn add_muled_col_to_col() {
+        let mut matrix =
+            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .add_muled_col_to_col(-3, 0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_rows_vec(),
+            vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
+        );
+    }
+
+    #[test]
+    fn add_row_to_row() {
+        let mut matrix =
+            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .add_row_to_row(0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_cols_vec(),
+            vec![vec![1, 2, 4, 4], vec![2, 4, 8, 8], vec![3, 6, 12, 12]]
+        );
+    }
+
+    #[test]
+    fn add_muled_row_to_row() {
+        let mut matrix =
+            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .add_muled_row_to_row(-3, 0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_cols_vec(),
+            vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
+        );
+    }
+
+    #[test]
+    fn sub_col_from_col() {
+        let mut matrix =
+            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .sub_col_from_col(0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_rows_vec(),
+            vec![vec![1, 2, 2, 4], vec![2, 4, 4, 8], vec![3, 6, 6, 12]]
+        );
+    }
+
+    #[test]
+    fn sub_muled_col_from_col() {
+        let mut matrix =
+            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .sub_muled_col_from_col(3, 0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_rows_vec(),
+            vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
+        );
+    }
+
+    #[test]
+    fn sub_row_from_row() {
+        let mut matrix =
+            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .sub_row_from_row(0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_cols_vec(),
+            vec![vec![1, 2, 2, 4], vec![2, 4, 4, 8], vec![3, 6, 6, 12]]
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn sub_muled_row_from_row() {
+        let mut matrix =
+            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
+                .expect("This should be well-defined.");
+        matrix
+            .sub_muled_row_from_row(-3, 0, 2)
+            .expect("This should be well-defined");
+        assert_eq!(
+            matrix.into_cols_vec(),
+            vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
+        );
+    }
+
+
 }

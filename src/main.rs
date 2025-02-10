@@ -13,6 +13,7 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(anonymous_lifetime_in_impl_trait)]
 #![feature(unwrap_infallible)]
 #![feature(iter_collect_into)]
+#![feature(result_flattening)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER

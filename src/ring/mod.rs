@@ -4,6 +4,7 @@ use std::{
     iter::Sum,
     ops::{Add, Mul, Neg, Sub},
 };
+use integers::Integer;
 
 pub trait AbelianGroup:
     Add<Output = Self> + Neg<Output = Self> + Sub<Output = Self> + Sum + Sized + PartialEq + Eq + Copy
@@ -11,7 +12,7 @@ pub trait AbelianGroup:
     fn zero() -> Self;
 }
 
-pub trait Ring: AbelianGroup + Mul<Output = Self> {
+pub trait Ring: AbelianGroup + Mul<Output = Self> + From<Integer> {
     fn one() -> Self;
 
     fn dot_product(
