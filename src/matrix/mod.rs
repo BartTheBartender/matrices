@@ -436,6 +436,43 @@ impl<R: Ring> Mul<Matrix<R>> for Matrix<R> {
     }
 }
 
+///Mutliplication by a vector
+impl<R: Ring> Mul<&Vec<R>> for &Matrix<R> {
+    type Output = Vec<R>;
+    fn mul(self, vec: &Vec<R>) -> Self::Output {
+        debug_assert_eq!(
+            self.row_len(),
+            vec.len(),
+            "Incorrect shapes: matrix.row_len() = {}, vec.len() = {}",
+            self.row_len(),
+            vec.len()
+        );
+        self.rows()
+            .map(|row| R::dot_product(row.copied(), vec.iter().copied()))
+            .collect::<Vec<_>>()
+    }
+}
+
+impl<R: Ring> Mul<Vec<R>> for &Matrix<R> {
+    type Output = Vec<R>;
+    fn mul(self, vec: Vec<R>) -> Self::Output {
+        self * (&vec)
+    }
+}
+
+impl<R: Ring> Mul<&Vec<R>> for Matrix<R> {
+    type Output = Vec<R>;
+    fn mul(self, vec: &Vec<R>) -> Self::Output {
+        (&self) * vec
+    }
+}
+
+impl<R: Ring> Mul<Vec<R>> for Matrix<R> {
+    type Output = Vec<R>;
+    fn mul(self, vec: Vec<R>) -> Self::Output {
+        (&self) * (&vec)
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -540,6 +577,31 @@ mod test {
             .expect("This should be well-defined.");
 
         let _ = a * b;
+    }
+
+    #[test]
+    fn mul_matrix_vector_1() {
+        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4]]).expect("This should be well-defined");
+        let v = vec![1,2];
+        
+        assert_eq!(a * v, vec![3,8]);
+
+    }
+
+    #[test]
+    fn mul_matrix_vector_2() {
+        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4], vec![1,-1]]).expect("This should be well-defined");
+        let v = vec![1,2];
+        
+        assert_eq!(a * v, vec![3,8,-1]);
+
+    }
+
+    #[test]
+    #[should_panic(expected = "Incorrect shapes: matrix.row_len() = 2, vec.len() = 3")]
+    fn mul_matrix_vector_wrong_shapes() {
+        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4]]).expect("This should be well-defined");
+        let _ = a * vec![1,2,3];
     }
 
     #[test]
