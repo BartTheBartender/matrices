@@ -1,8 +1,10 @@
+mod gaussian_elimination;
+mod smith_normal_form;
 mod vec2d;
 
-use crate::ring::Ring;
+use crate::ring::{Finite, Ring};
 use custom_error::custom_error;
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
 use std::ops::{Add, Mul, Neg, Sub};
 use vec2d::{Vec2d, Vec2dError};
 
@@ -434,6 +436,7 @@ impl<R: Ring> Mul<Matrix<R>> for Matrix<R> {
     }
 }
 
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -638,19 +641,16 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn sub_muled_row_from_row() {
         let mut matrix =
             M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
                 .expect("This should be well-defined.");
         matrix
-            .sub_muled_row_from_row(-3, 0, 2)
+            .sub_muled_row_from_row(3, 0, 2)
             .expect("This should be well-defined");
         assert_eq!(
             matrix.into_cols_vec(),
             vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
         );
     }
-
-
 }

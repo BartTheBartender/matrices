@@ -1,10 +1,13 @@
 pub mod integers;
+pub mod cyclic;
 
+use integers::{Integer, Nat};
 use std::{
     iter::Sum,
+    num::NonZero,
     ops::{Add, Mul, Neg, Sub},
+    hash::Hash,
 };
-use integers::Integer;
 
 pub trait AbelianGroup:
     Add<Output = Self> + Neg<Output = Self> + Sub<Output = Self> + Sum + Sized + PartialEq + Eq + Copy
@@ -28,4 +31,19 @@ pub trait Ring: AbelianGroup + Mul<Output = Self> + From<Integer> {
 
 pub trait PID: Ring {
     fn gcd(x: Self, y: Self) -> (Self, Self, Self);
+}
+
+pub trait Euclidian: PID {
+    fn valuation(self) -> Option<NonZero<Nat>>;
+}
+
+pub trait Field: Euclidian {
+    fn valuation(self) -> Option<NonZero<Nat>> {
+        (self == Self::zero()).then(|| unsafe { NonZero::new_unchecked(1) })
+    }
+}
+
+pub trait Finite: Copy + Hash {
+    type Output: Copy;
+    fn elements() -> impl ExactSizeIterator<Item = Self::Output>;
 }

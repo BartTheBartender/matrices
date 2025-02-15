@@ -1,5 +1,6 @@
+use crate::ring::Finite;
 use custom_error::custom_error;
-use itertools::iproduct;
+use itertools::*;
 use std::{fmt, mem};
 
 custom_error! {
@@ -17,7 +18,7 @@ custom_error! {
 }
 
 /// Struct representing 2d vector, optimized for collumn operations.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Vec2d<T> {
     pub(super) buffer: Vec<T>,
     pub(super) nof_rows: usize,
@@ -482,6 +483,36 @@ impl<T> Vec2d<T> {
             Ok(())
         }
     }
+
+    pub fn from_vec_2d<U: Into<T>>(vec2d: Vec2d<U>) -> Self {
+        let nof_cols = vec2d.nof_cols();
+        let nof_rows = vec2d.nof_rows();
+
+        Self {
+            nof_cols,
+            nof_rows,
+            buffer: vec2d
+                .buffer
+                .into_iter()
+                .map(|value| (value).into())
+                .collect::<Vec<_>>(),
+        }
+    }
+
+    pub fn into_vec_2d<U: From<T>>(self) -> Vec2d<U> {
+        let nof_cols = self.nof_cols();
+        let nof_rows = self.nof_rows();
+
+        Vec2d::<U> {
+            nof_cols,
+            nof_rows,
+            buffer: self
+                .buffer
+                .into_iter()
+                .map(|value| (value).into())
+                .collect::<Vec<_>>(),
+        }
+    }
 }
 
 impl<T: fmt::Display> fmt::Display for Vec2d<T> {
@@ -521,6 +552,28 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
             self.nof_cols(),
             stringified
         )
+    }
+}
+
+impl<T: Finite> Vec2d<T> {
+    fn elements(
+        nof_cols: usize,
+        nof_rows: usize,
+    ) -> impl Iterator<Item = Vec2d<<T as crate::ring::Finite>::Output>> {
+        let elements = T::elements().collect::<Vec<_>>();
+        (0..nof_cols * nof_rows)
+            .map(|_| (0..elements.len()))
+            .multi_cartesian_product()
+            .map(
+                move |buffer_indices: Vec<usize>| Vec2d::<<T as crate::ring::Finite>::Output> {
+                    nof_cols,
+                    nof_rows,
+                    buffer: buffer_indices
+                        .into_iter()
+                        .map(|idx| elements[idx])
+                        .collect::<Vec<_>>(),
+                },
+            )
     }
 }
 
@@ -989,5 +1042,46 @@ mod test {
                 col_len: vec.col_len()
             }
         );
+    }
+
+    #[test]
+    fn elements_1() {
+        use crate::ring::cyclic::Cyclic;
+        use std::collections::HashSet;
+        let output = Vec2d::<Cyclic<2>>::elements(2, 2).collect::<HashSet<_>>();
+
+        let correct = vec![
+            vec![vec![0, 0], vec![0, 0]],
+            vec![vec![0, 0], vec![0, 1]],
+            vec![vec![0, 0], vec![1, 0]],
+            vec![vec![0, 0], vec![1, 1]],
+            vec![vec![0, 1], vec![0, 0]],
+            vec![vec![0, 1], vec![0, 1]],
+            vec![vec![0, 1], vec![1, 0]],
+            vec![vec![0, 1], vec![1, 1]],
+            vec![vec![1, 0], vec![0, 0]],
+            vec![vec![1, 0], vec![0, 1]],
+            vec![vec![1, 0], vec![1, 0]],
+            vec![vec![1, 0], vec![1, 1]],
+            vec![vec![1, 1], vec![0, 0]],
+            vec![vec![1, 1], vec![0, 1]],
+            vec![vec![1, 1], vec![1, 0]],
+            vec![vec![1, 1], vec![1, 1]],
+        ]
+        .into_iter()
+        .map(|vec| {
+            Vec2d::from_rows_vec(vec)
+                .expect("This should be well-defined")
+                .into_vec_2d::<Cyclic<2>>()
+        })
+        .collect::<HashSet<_>>();
+
+        assert_eq!(correct, output);
+    }
+
+    #[test]
+    fn elements_2() {
+        use crate::ring::cyclic::Cyclic;
+        assert_eq!(Vec2d::<Cyclic<8>>::elements(2, 2).count(), 4096);
     }
 }
