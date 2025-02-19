@@ -1,10 +1,9 @@
-mod gaussian_elimination;
-mod smith_normal_form;
 mod vec2d;
+pub mod algorithms;
 
-use crate::ring::{Finite, Ring};
+use crate::ring::Ring;
 use custom_error::custom_error;
-use itertools::{iproduct, Itertools};
+use itertools::iproduct;
 use std::ops::{Add, Mul, Neg, Sub};
 use vec2d::{Vec2d, Vec2dError};
 
@@ -581,27 +580,28 @@ mod test {
 
     #[test]
     fn mul_matrix_vector_1() {
-        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4]]).expect("This should be well-defined");
-        let v = vec![1,2];
-        
-        assert_eq!(a * v, vec![3,8]);
+        let a =
+            M::from_rows_vec(vec![vec![3, 0], vec![0, 4]]).expect("This should be well-defined");
+        let v = vec![1, 2];
 
+        assert_eq!(a * v, vec![3, 8]);
     }
 
     #[test]
     fn mul_matrix_vector_2() {
-        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4], vec![1,-1]]).expect("This should be well-defined");
-        let v = vec![1,2];
-        
-        assert_eq!(a * v, vec![3,8,-1]);
+        let a = M::from_rows_vec(vec![vec![3, 0], vec![0, 4], vec![1, -1]])
+            .expect("This should be well-defined");
+        let v = vec![1, 2];
 
+        assert_eq!(a * v, vec![3, 8, -1]);
     }
 
     #[test]
     #[should_panic(expected = "Incorrect shapes: matrix.row_len() = 2, vec.len() = 3")]
     fn mul_matrix_vector_wrong_shapes() {
-        let a = M::from_rows_vec(vec![vec![3, 0], vec![0,4]]).expect("This should be well-defined");
-        let _ = a * vec![1,2,3];
+        let a =
+            M::from_rows_vec(vec![vec![3, 0], vec![0, 4]]).expect("This should be well-defined");
+        let _ = a * vec![1, 2, 3];
     }
 
     #[test]

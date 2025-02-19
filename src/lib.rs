@@ -18,6 +18,7 @@ however, a bug inside it prevents using type aliases for other types
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
+#![allow(clippy::module_name_repetitions, reason = "this is a dumb rule")]
 
 // - - -
 /* clippy begin */
@@ -97,12 +98,8 @@ however, a bug inside it prevents using type aliases for other types
     clippy::unneeded_field_pattern,
     clippy::unseparated_literal_suffix,
 )]
-#![allow(clippy::module_name_repetitions, reason = "this is a dumb rule")]
 /* clippy end */
 
 pub mod matrix;
 pub mod ring;
 
-fn main() {
-    println!(" 128 as a i16 is: {}", 11234_u16 as i16);
-}
