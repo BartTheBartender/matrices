@@ -3,9 +3,9 @@ use super::{
     *,
 };
 use std::{
+    fmt,
     iter::Sum,
     ops::{Add, Mul, Neg, Sub},
-    fmt,
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
@@ -94,12 +94,16 @@ impl<const N: u16> fmt::Display for Cyclic<N> {
 
 #[cfg(test)]
 mod test {
-    
+
     use super::*;
 
     #[test]
     fn elements() {
-        assert_eq!(Cyclic::<2>::elements().map(|num| num.value).collect::<Vec<_>>(), vec![0,1]);
+        assert_eq!(
+            Cyclic::<2>::elements()
+                .map(|num| num.value)
+                .collect::<Vec<_>>(),
+            vec![0, 1]
+        );
     }
-
 }

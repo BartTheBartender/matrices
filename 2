@@ -58,12 +58,12 @@ impl<T> Vec2d<T> {
         if i >= self.nof_rows() {
             Err(Vec2dError::ColIdxOutOfBounds {
                 col_idx: i,
-                col_len: self.nof_rows(),
+                col_len: self.col_len(),
             })
         } else if j >= self.nof_cols() {
             Err(Vec2dError::RowIdxOutOfBounds {
                 row_idx: j,
-                row_len: self.nof_cols(),
+                row_len: self.row_len(),
             })
         } else {
             Ok(unsafe { self.get_unchecked(i, j) })
@@ -76,16 +76,18 @@ impl<T> Vec2d<T> {
     }
 
     pub fn get_mut<'a>(&'a mut self, i: usize, j: usize) -> Result<&'a mut T, Vec2dError> {
-        println!("a[{},{}]", i, j);
-        if i >= self.nof_rows() {
+        let row_len = self.row_len();
+        let col_len = self.row_len();
+        print("a[{},{}]", i, j);
+        if i >= col_len {
             Err(Vec2dError::ColIdxOutOfBounds {
                 col_idx: i,
-                col_len: self.nof_rows(),
+                col_len,
             })
         } else if j >= self.nof_cols() {
             Err(Vec2dError::RowIdxOutOfBounds {
                 row_idx: j,
-                row_len: self.nof_cols(),
+                row_len,
             })
         } else {
             Ok(unsafe { self.get_unchecked_mut(i, j) })
@@ -400,8 +402,8 @@ impl<T> Vec2d<T> {
     /// ------   -----
     /// |self| = |top|
     /// ------   -----
-    /// ///      |bot|
-    /// ///      -----
+    ///          |bot|
+    ///          -----
     /// in such a way top.nof_rows() = row_idx (and bot.nof_rows() = self.nof_rows() - rows_idx).
     /// Otherwise returns error.
     pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
@@ -421,8 +423,8 @@ impl<T> Vec2d<T> {
     /// ------   --------------------
     /// |self| = |top_left|top_right|
     /// ------   --------------------
-    /// ///      |bot_left|bot_right|
-    /// ///      --------------------
+    ///          |bot_left|bot_right|
+    ///          --------------------
     /// in such a way top_left.shape() = (col_idx, row_idx)
     /// whenever it is possible.
     pub fn split(
@@ -1166,45 +1168,30 @@ mod test {
             .expect("This should be well-defined.");
 
         assert_eq!(
-            vec.get_mut(0, 0)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(0, 0).expect("This should be well-defined.").clone(),
             1
         );
         assert_eq!(
-            vec.get_mut(0, 1)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(0, 1).expect("This should be well-defined.").clone(),
             2
         );
 
         assert_eq!(
-            vec.get_mut(1, 0)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(1, 0).expect("This should be well-defined.").clone(),
             10
         );
         assert_eq!(
-            vec.get_mut(1, 1)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(1, 1).expect("This should be well-defined.").clone(),
             20
         );
 
         assert_eq!(
-            vec.get_mut(2, 0)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(2, 0).expect("This should be well-defined.").clone(),
             100
         );
         assert_eq!(
-            vec.get_mut(2, 1)
-                .expect("This should be well-defined.")
-                .clone(),
+            vec.get_mut(2, 1).expect("This should be well-defined.").clone(),
             200
         );
-
-        *vec.get_mut(0, 0).expect("This should be well-defined.") *= -1;
-        *vec.get_mut(0, 0).expect("This should be well-defined.") *= -1;
     }
 }
