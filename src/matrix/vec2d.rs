@@ -76,7 +76,6 @@ impl<T> Vec2d<T> {
     }
 
     pub fn get_mut<'a>(&'a mut self, i: usize, j: usize) -> Result<&'a mut T, Vec2dError> {
-        println!("a[{},{}]", i, j);
         if i >= self.nof_rows() {
             Err(Vec2dError::ColIdxOutOfBounds {
                 col_idx: i,
@@ -745,7 +744,6 @@ mod test {
         let vec_t = vec![vec!["a", "b", "c"], vec!["d", "e", "f"]];
         let vec2d = Vec2d::from_rows(vec_t.into_iter().map(|row| row.into_iter()))
             .expect("This should be well-defined.");
-        println!("{}", vec2d);
         assert_eq!(vec2d.shape(), (2, 3));
         assert_eq!(vec2d.buffer, vec!["a", "d", "b", "e", "c", "f"]);
     }
@@ -999,7 +997,6 @@ mod test {
     fn split() {
         let vec = Vec2d::from_rows((1..5).map(|i| (1..6).map(move |j| i * j)))
             .expect("This should be well-defined.");
-        println!("{}", vec);
         let (top_left, top_right, bot_left, bot_right) =
             vec.split(3, 3).expect("The split should be well-defined.");
 

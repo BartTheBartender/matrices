@@ -1,5 +1,5 @@
-mod vec2d;
 pub mod algorithms;
+mod vec2d;
 
 use crate::ring::Ring;
 use custom_error::custom_error;
@@ -257,6 +257,31 @@ impl<R: Ring> Matrix<R> {
             })
             .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
             .flatten()
+    }
+}
+
+impl<R: Ring + std::fmt::Display> Matrix<R> {
+    /// For given matrix a, returns a^n such that a^n=a^{n+1}
+    /// or None if such power doesn't exists.
+    pub fn infinite_power(&self) -> Option<Self> {
+        let powers = vec![self.clone()];
+        self.infinite_power_helper(powers)
+    }
+    fn infinite_power_helper(&self, mut powers: Vec<Self>) -> Option<Self> {
+        debug_assert!(self.is_square(), "Cannot iterate non-square matrix.");
+        let last_idx = powers.len() - 1; // powers.len() > 0
+        let self_nth_power: &Self = &powers[last_idx];
+        let self_n_plus_one_power = self_nth_power * self;
+
+        if let Some(repeated_power_idx) = powers
+            .iter()
+            .position(|self_kth_power| self_kth_power == &self_n_plus_one_power)
+        {
+            (repeated_power_idx == last_idx).then(|| self_n_plus_one_power)
+        } else {
+            powers.push(self_n_plus_one_power);
+            self.infinite_power_helper(powers)
+        }
     }
 }
 
@@ -713,6 +738,25 @@ mod test {
         assert_eq!(
             matrix.into_cols_vec(),
             vec![vec![1, 2, 0, 4], vec![2, 4, 0, 8], vec![3, 6, 0, 12]]
+        );
+    }
+
+    #[test]
+    fn infinite_power_1() {
+        let matrix = M::from_rows_vec(vec![vec![0, 1, 0], vec![0, 0, 1], vec![1, 0, 0]])
+            .expect("This should be well-defined.");
+
+        let matrix_inf_power = matrix.infinite_power();
+        assert!(matrix_inf_power.is_none());
+    }
+
+    #[test]
+    fn infinite_power_2() {
+        let matrix = M::from_rows_vec(vec![vec![2, -2, -4], vec![-1, 3, 4], vec![1, -2, -3]])
+            .expect("This should be well-defined.");
+        assert_eq!(
+            matrix.infinite_power().expect("This matrix is idempotent."),
+            matrix
         );
     }
 }

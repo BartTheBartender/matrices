@@ -36,7 +36,7 @@ however, a bug inside it prevents using type aliases for other types
     //clippy::expect_used,
     //clippy::panic,
     clippy::print_stderr,
-    //clippy::print_stdout,
+    clippy::print_stdout,
     clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
