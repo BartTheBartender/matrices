@@ -19,7 +19,6 @@ however, a bug inside it prevents using type aliases for other types
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
 #![allow(clippy::module_name_repetitions, reason = "this is a dumb rule")]
-
 // - - -
 /* clippy begin */
 #![warn(
@@ -102,4 +101,3 @@ however, a bug inside it prevents using type aliases for other types
 
 pub mod matrix;
 pub mod ring;
-

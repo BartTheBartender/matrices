@@ -1,7 +1,11 @@
 pub mod integers;
 pub mod cyclic;
 
-use integers::{Integer, Nat};
+pub use integers::Integer as Integer;
+pub use integers::Nat as Nat;
+pub use cyclic::Cyclic as Cyclic;
+
+
 use std::{
     iter::Sum,
     num::NonZero,
