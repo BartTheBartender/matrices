@@ -597,7 +597,7 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
 }
 
 impl<T: Finite> Vec2d<T> {
-    fn elements(
+    pub fn elements(
         nof_cols: usize,
         nof_rows: usize,
     ) -> impl Iterator<Item = Vec2d<<T as crate::ring::Finite>::Output>> {

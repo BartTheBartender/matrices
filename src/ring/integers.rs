@@ -14,7 +14,7 @@ impl Ring for Integer {
     }
 }
 
-impl PID for Integer {
+impl Bezout for Integer {
     fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
         fn gcd_helper(a: Integer, b: Integer) -> (Integer, Integer, Integer) {
             match b {
@@ -32,6 +32,10 @@ impl PID for Integer {
             x * Integer::signum(gcd),
             y * Integer::signum(gcd),
         )
+    }
+
+    fn try_divide(a: Self, b: Self) -> Option<Self> {
+        (a % b == 0).then(|| a / b)
     }
 }
 

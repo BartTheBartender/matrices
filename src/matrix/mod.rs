@@ -1,5 +1,5 @@
 pub mod algorithms;
-mod vec2d;
+pub mod vec2d;
 
 use crate::ring::Ring;
 use custom_error::custom_error;
@@ -23,6 +23,13 @@ impl<R: Ring> Matrix<R> {
             nof_rows,
             buffer: vec![R::zero(); nof_cols * nof_rows],
         }
+    }
+
+    pub fn identity(nof_rows: usize) -> Self {
+        let mut id = Self::zero(nof_rows, nof_rows);
+        (0..nof_rows)
+            .for_each(|i| *id.get_mut(i, i).expect("This should be in proper bounds") = R::one());
+        id
     }
 
     pub fn mul_col_by(&mut self, col_idx: usize, r: R) -> Result<(), MatrixError> {
@@ -510,6 +517,14 @@ mod test {
         assert_eq!(
             M::zero(3, 2).into_rows_vec(),
             vec![vec![0, 0], vec![0, 0], vec![0, 0]]
+        );
+    }
+
+    #[test]
+    fn identity() {
+        assert_eq!(
+            M::identity(3).into_rows_vec(),
+            vec![vec![1, 0, 0], vec![0, 1, 0], vec![0, 0, 1]]
         );
     }
 
