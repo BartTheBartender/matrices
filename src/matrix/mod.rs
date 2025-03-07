@@ -17,6 +17,28 @@ custom_error! {
 pub type Matrix<R: Ring> = Vec2d<R>;
 
 impl<R: Ring> Matrix<R> {
+    pub fn is_upper_triangular(&self) -> bool {
+        (1..self.nof_cols()).all(|j| {
+            self.col(j)
+                .expect("The col_idx is in proper bounds.")
+                .take(j-1) // all such aij with i < j
+                .all(|aij| *aij == R::zero())
+        })
+    }
+
+    pub fn is_lower_triangular(&self) -> bool {
+        (0..self.nof_cols()).all(|j| {
+            self.col(j)
+                .expect("The col_idx is in proper bounds.")
+                .skip(j+1) // all such aij with i > j
+                .all(|aij| *aij == R::zero())
+        })
+    }
+
+    pub fn is_diagonal(&self) -> bool {
+        self.is_upper_triangular() && self.is_lower_triangular()
+    }
+
     pub fn zero(nof_rows: usize, nof_cols: usize) -> Self {
         Self {
             nof_cols,
@@ -265,9 +287,7 @@ impl<R: Ring> Matrix<R> {
             .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
             .flatten()
     }
-}
 
-impl<R: Ring + std::fmt::Display> Matrix<R> {
     /// For given matrix a, returns a^n such that a^n=a^{n+1}
     /// or None if such power doesn't exists.
     pub fn infinite_power(&self) -> Option<Self> {
@@ -511,6 +531,16 @@ mod test {
     use crate::ring::integers::Integer;
 
     type M = Matrix<Integer>;
+
+    #[test]
+    fn upper_triangular() {
+        assert!(M::from_rows_arr([[1,0,0,0],[2,1,0,0],[3,78,9,0]]).is_upper_triangular());
+    }
+
+    //#[test]
+    //fn lower_triangular() {
+    //    assert!(M::from_rows_arr([[]]).is_lower_triangular());
+    //}
 
     #[test]
     fn zero() {

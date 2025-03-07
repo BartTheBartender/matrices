@@ -1,6 +1,6 @@
 use super::*;
-pub type Integer = i16;
-pub type Nat = u16;
+pub type Integer = i32;
+pub type Nat = u32;
 
 impl AbelianGroup for Integer {
     fn zero() -> Self {
@@ -35,7 +35,19 @@ impl Bezout for Integer {
     }
 
     fn try_divide(a: Self, b: Self) -> Option<Self> {
-        (a % b == 0).then(|| a / b)
+        (b != 0 && a % b == 0).then(|| a / b)
+    }
+}
+
+impl Noetherian for Integer {}
+
+impl Euclidian for Integer {
+    fn norm(a: Self) -> Option<NonZero<Nat>> {
+        NonZero::new(a.unsigned_abs())
+    }
+
+    fn divide_with_reminder(a: Self, b: Self) -> (Self, Self) {
+        (a / b, a % b)
     }
 }
 
@@ -66,5 +78,16 @@ mod test {
             Integer::dot_product(vec![1, 2, 3].into_iter(), vec![3, 2, 1].into_iter()),
             10
         );
+    }
+
+    #[test]
+    fn divide_with_reminder() {
+        use rand::random;
+        (0..1000)
+            .map(|_| (random::<Integer>(), random::<Integer>()))
+            .for_each(|(a, b)| {
+                let (q, r) = Integer::divide_with_reminder(a, b);
+                assert_eq!(a, q * b + r)
+            });
     }
 }

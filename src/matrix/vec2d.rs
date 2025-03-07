@@ -208,6 +208,13 @@ impl<T> Vec2d<T> {
             .collect::<Vec<_>>()
     }
 
+    pub fn from_cols_arr<const NOF_ROWS: usize, const NOF_COLS: usize>(
+        cols_arr: [[T; NOF_ROWS]; NOF_COLS],
+    ) -> Self {
+        Self::from_cols(cols_arr.into_iter().map(|col| col.into_iter()))
+            .expect("The arrays have correct bounds.")
+    }
+
     /// The caller must guaranttee that row_idx < self.nof_rows()
     pub unsafe fn row_unchecked(&self, row_idx: usize) -> impl Iterator<Item = &T> {
         (0..self.row_len())
@@ -280,6 +287,13 @@ impl<T> Vec2d<T> {
         self.into_rows()
             .map(|row_iterator| row_iterator.collect::<Vec<_>>())
             .collect::<Vec<_>>()
+    }
+
+    pub fn from_rows_arr<const NOF_ROWS: usize, const NOF_COLS: usize>(
+        rows_arr: [[T; NOF_COLS]; NOF_ROWS],
+    ) -> Self {
+        Self::from_rows(rows_arr.into_iter().map(|row| row.into_iter()))
+            .expect("The arrays have correct bounds.")
     }
 
     /// Given 2d vectors left and right, create the 2d vector
@@ -463,11 +477,13 @@ impl<T> Vec2d<T> {
                 row_len: nof_cols,
             })
         } else {
-            (0..col_len)
-                .map(|idx| (i * col_len + idx, j * col_len + idx))
-                .for_each(|(col_i_idx, col_j_idx)| unsafe {
-                    self.buffer.swap_unchecked(col_i_idx, col_j_idx)
-                });
+            if i != j {
+                (0..col_len)
+                    .map(|idx| (i * col_len + idx, j * col_len + idx))
+                    .for_each(|(col_i_idx, col_j_idx)| unsafe {
+                        self.buffer.swap_unchecked(col_i_idx, col_j_idx)
+                    });
+            }
             Ok(())
         }
     }
@@ -516,11 +532,13 @@ impl<T> Vec2d<T> {
                 col_len: nof_rows,
             })
         } else {
-            (0..row_len)
-                .map(|idx| (i + nof_rows * idx, j + nof_rows * idx))
-                .for_each(|(row_i_idx, row_j_idx)| unsafe {
-                    self.buffer.swap_unchecked(row_i_idx, row_j_idx)
-                });
+            if i != j {
+                (0..row_len)
+                    .map(|idx| (i + nof_rows * idx, j + nof_rows * idx))
+                    .for_each(|(row_i_idx, row_j_idx)| unsafe {
+                        self.buffer.swap_unchecked(row_i_idx, row_j_idx)
+                    });
+            }
             Ok(())
         }
     }
@@ -722,6 +740,12 @@ mod test {
     }
 
     #[test]
+    fn from_cols_arr() {
+        let vec = Vec2d::from_cols_arr([[1, 2, 3, 3], [4, 5, 6, 6], [7, 8, 9, 9]]);
+        assert_eq!(vec.buffer, vec![1, 2, 3, 3, 4, 5, 6, 6, 7, 8, 9, 9,]);
+    }
+
+    #[test]
     fn transpose_1() {
         let vec_t = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
         let mut vec2d = Vec2d::from_cols(vec_t.clone().into_iter().map(|col| col.into_iter()))
@@ -779,6 +803,12 @@ mod test {
                 .expect_err("This should be non-empty but have different row lens."),
             Vec2dError::DifferentLengthsRowsIterator
         );
+    }
+
+    #[test]
+    fn from_rows_arr() {
+        let vec = Vec2d::from_rows_arr([[1, 2, 3, 3], [4, 5, 6, 6], [7, 8, 9, 9]]);
+        assert_eq!(vec.buffer, vec![1, 4, 7, 2, 5, 8, 3, 6, 9, 3, 6, 9]);
     }
 
     #[test]
@@ -1154,6 +1184,61 @@ mod test {
         assert_eq!(
             vec.get(2, 1).expect("This should be well-defined.").clone(),
             200
+        );
+    }
+
+    #[test]
+    fn get_2() {
+        let vec = Vec2d::from_rows_arr([[2, 3, 4, 5], [6, 1, 8, 7], [9, 3, 2, 4]]);
+        assert_eq!(
+            vec.get(0, 0).expect("This should be well-defined.").clone(),
+            2
+        );
+        assert_eq!(
+            vec.get(0, 1).expect("This should be well-defined.").clone(),
+            3
+        );
+        assert_eq!(
+            vec.get(0, 2).expect("This should be well-defined.").clone(),
+            4
+        );
+        assert_eq!(
+            vec.get(0, 3).expect("This should be well-defined.").clone(),
+            5
+        );
+
+        assert_eq!(
+            vec.get(1, 0).expect("This should be well-defined.").clone(),
+            6
+        );
+        assert_eq!(
+            vec.get(1, 1).expect("This should be well-defined.").clone(),
+            1
+        );
+        assert_eq!(
+            vec.get(1, 2).expect("This should be well-defined.").clone(),
+            8
+        );
+        assert_eq!(
+            vec.get(1, 3).expect("This should be well-defined.").clone(),
+            7
+        );
+
+        assert_eq!(
+            vec.get(2, 0).expect("This should be well-defined.").clone(),
+            9
+        );
+        assert_eq!(
+            vec.get(2, 1).expect("This should be well-defined.").clone(),
+            3
+        );
+        assert_eq!(
+            vec.get(2, 2).expect("This should be well-defined.").clone(),
+            2
+        );
+        assert_eq!(
+            vec.get(2, 3).expect("This should be well-defined.").clone(),
+            4
         );
     }
 

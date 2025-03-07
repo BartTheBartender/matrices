@@ -1,15 +1,15 @@
-pub mod integers;
 pub mod cyclic;
+pub mod integers;
 
-pub use integers::Integer as Integer;
-pub use integers::Nat as Nat;
-pub use cyclic::Cyclic as Cyclic;
-
+pub use cyclic::Cyclic;
+pub use integers::Integer;
+pub use integers::Nat;
 
 use std::{
-    iter::Sum,
-    ops::{Add, Mul, Neg, Sub},
     hash::Hash,
+    iter::Sum,
+    num::NonZero,
+    ops::{Add, Mul, Neg, Sub},
 };
 
 pub trait AbelianGroup:
@@ -36,8 +36,29 @@ pub trait Bezout: Ring {
     /// Returns (g,x,y) such that ax + by = g and g = gcd(a,b)
     fn gcd(a: Self, b: Self) -> (Self, Self, Self);
     fn try_divide(a: Self, b: Self) -> Option<Self>;
+
+    /// determines if there exists c such that b = a * c
+    fn divides(a: Self, b: Self) -> bool {
+        let o = Self::zero();
+        if b == o {
+            true
+        } else if a == o {
+            false
+        } else {
+            Self::try_divide(b, a).is_some()
+        }
+    }
 }
 
+/// In Rust this can be only a formal statement without real code.
+pub trait Noetherian: Ring {}
+
+pub trait Euclidian: Noetherian + Bezout {
+    fn norm(a: Self) -> Option<NonZero<Nat>>;
+
+    /// returns (q,r) such that a = qb + r and norm(r) < norm(b) or r = 0
+    fn divide_with_reminder(a: Self, b: Self) -> (Self, Self);
+}
 
 pub trait Finite: Copy + Hash {
     type Output: Copy;
