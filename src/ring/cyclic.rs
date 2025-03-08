@@ -78,11 +78,11 @@ impl<const N: u64> Ring for Cyclic<N> {
 
 impl<const N: u64> Bezout for Cyclic<N> {
     fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
-        let (g, x, y) = Integer::gcd(
+        let (gcd, x, y) = Integer::gcd(
             a.value.try_into().expect("This should be convertable."),
             b.value.try_into().expect("This should be convertable."),
         );
-        (Self::from(g), Self::from(x), Self::from(y))
+        (Self::from(gcd), Self::from(x), Self::from(y))
     }
 
     fn try_divide(a: Self, b: Self) -> Option<Self> {
@@ -90,13 +90,17 @@ impl<const N: u64> Bezout for Cyclic<N> {
         let b_v = b.value.try_into().expect("The overflow should not occur.");
         let (d, _, _) = Integer::gcd(a_v, b_v);
 
-        let (g, x, _) = Integer::gcd(
+        let (gcd, x, _) = Integer::gcd(
             b_v / d,
             N.try_into().expect("The overflow should not occur."),
         );
         // a/b = a_v / b_v = (a_v / d) / (b_v / d)
         // it suffices for b_v / d to be invertible mod N
-        (g == 1).then(|| Self::from(a_v / d) * Self::from(x))
+        (gcd == 1).then(|| Self::from(a_v / d) * Self::from(x))
+    }
+
+    fn canonize(a: Self) -> (Self, Self) {
+        todo!()
     }
 }
 

@@ -48,6 +48,12 @@ pub trait Bezout: Ring {
             Self::try_divide(b, a).is_some()
         }
     }
+
+    /// The group of units U(R) acts on R by left-multiplication.
+    /// This function returns a triple (a_canon, to_canon)
+    /// * a_canon is the element representing U(R) * a
+    /// * a * to_canon = to_canon
+    fn canonize(a: Self) -> (Self, Self);
 }
 
 /// In Rust this can be only a formal statement without real code.

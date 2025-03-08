@@ -37,6 +37,10 @@ impl Bezout for Integer {
     fn try_divide(a: Self, b: Self) -> Option<Self> {
         (b != 0 && a % b == 0).then(|| a / b)
     }
+
+    fn canonize(a: Self) -> (Self, Self) {
+        (a.abs(), a.signum())
+    }
 }
 
 impl Noetherian for Integer {}
