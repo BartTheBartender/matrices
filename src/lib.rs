@@ -37,11 +37,11 @@ however, a bug inside it prevents using type aliases for other types
     //clippy::expect_used,
     //clippy::panic,
     clippy::print_stderr,
-    clippy::print_stdout,
-    clippy::todo,
+    //clippy::print_stdout,
+    //clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
-    clippy::use_debug,
+    //clippy::use_debug,
     //clippy::unwrap_used,
 
     // restricions

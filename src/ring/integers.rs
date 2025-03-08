@@ -1,6 +1,6 @@
 use super::*;
-pub type Integer = i32;
-pub type Nat = u32;
+pub type Integer = i64;
+pub type Nat = u64;
 
 impl AbelianGroup for Integer {
     fn zero() -> Self {

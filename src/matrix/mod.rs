@@ -408,7 +408,7 @@ impl<R: Ring> Sub<Matrix<R>> for Matrix<R> {
 
 /// Negation
 impl<R: Ring> Neg for Matrix<R> {
-    type Output = Matrix<R>;
+    type Output = Self;
     fn neg(self) -> Self::Output {
         let nof_cols = self.nof_cols();
         let nof_rows = self.nof_rows();

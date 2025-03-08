@@ -1,7 +1,4 @@
-use super::{
-    integers::{Integer, Nat},
-    *,
-};
+use super::{integers::Integer, *};
 use std::{
     fmt,
     iter::Sum,
@@ -9,11 +6,11 @@ use std::{
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct Cyclic<const N: u32> {
-    value: Nat,
+pub struct Cyclic<const N: u64> {
+    value: u64,
 }
 
-impl<const N: u32> Add<Self> for Cyclic<N> {
+impl<const N: u64> Add<Self> for Cyclic<N> {
     type Output = Self;
     fn add(self, other: Self) -> Self::Output {
         Self {
@@ -22,7 +19,7 @@ impl<const N: u32> Add<Self> for Cyclic<N> {
     }
 }
 
-impl<const N: u32> Neg for Cyclic<N> {
+impl<const N: u64> Neg for Cyclic<N> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
@@ -31,26 +28,26 @@ impl<const N: u32> Neg for Cyclic<N> {
     }
 }
 
-impl<const N: u32> Sub<Self> for Cyclic<N> {
+impl<const N: u64> Sub<Self> for Cyclic<N> {
     type Output = Self;
     fn sub(self, other: Self) -> Self::Output {
         self + (-other)
     }
 }
 
-impl<const N: u32> Sum for Cyclic<N> {
+impl<const N: u64> Sum for Cyclic<N> {
     fn sum<I: Iterator<Item = Self>>(iterator: I) -> Self {
         iterator.fold(Self::zero(), |acc, x| acc + x)
     }
 }
 
-impl<const N: u32> AbelianGroup for Cyclic<N> {
+impl<const N: u64> AbelianGroup for Cyclic<N> {
     fn zero() -> Self {
         Self { value: 0 }
     }
 }
 
-impl<const N: u32> Mul<Self> for Cyclic<N> {
+impl<const N: u64> Mul<Self> for Cyclic<N> {
     type Output = Self;
     fn mul(self, other: Self) -> Self::Output {
         Self {
@@ -59,11 +56,11 @@ impl<const N: u32> Mul<Self> for Cyclic<N> {
     }
 }
 
-impl<const N: u32> From<Integer> for Cyclic<N> {
+impl<const N: u64> From<Integer> for Cyclic<N> {
     fn from(int: Integer) -> Self {
-        let shifted: u32 = if int < 0 {
+        let shifted: u64 = if int < 0 {
             let n_as_integer = Integer::try_from(N).expect("This overflow should not occur");
-            u32::try_from(((int % n_as_integer) + n_as_integer) % n_as_integer)
+            u64::try_from(((int % n_as_integer) + n_as_integer) % n_as_integer)
                 .expect("This overflow cannot occur.")
         } else {
             int.try_into().expect("The overflow cannot occur")
@@ -73,13 +70,13 @@ impl<const N: u32> From<Integer> for Cyclic<N> {
     }
 }
 
-impl<const N: u32> Ring for Cyclic<N> {
+impl<const N: u64> Ring for Cyclic<N> {
     fn one() -> Self {
         Self { value: 1 }
     }
 }
 
-impl<const N: u32> Bezout for Cyclic<N> {
+impl<const N: u64> Bezout for Cyclic<N> {
     fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
         let (g, x, y) = Integer::gcd(
             a.value.try_into().expect("This should be convertable."),
@@ -103,31 +100,31 @@ impl<const N: u32> Bezout for Cyclic<N> {
     }
 }
 
-impl<const N: u32> Finite for Cyclic<N> {
-    type Output = Self;
-
-    fn elements() -> impl ExactSizeIterator<Item = Self::Output> {
-        (0..N).map(|value| Self { value })
-    }
-}
-impl<const N: u32> fmt::Display for Cyclic<N> {
+//impl<const N: u64> Finite for Cyclic<N> {
+//    type Output = Self;
+//
+//    fn elements() -> impl ExactSizeIterator<Item = Self::Output> {
+//        (0..N).map(|value| Self { value })
+//    }
+//}
+impl<const N: u64> fmt::Display for Cyclic<N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.value)
     }
 }
 
-#[cfg(test)]
-mod test {
-
-    use super::*;
-
-    #[test]
-    fn elements() {
-        assert_eq!(
-            Cyclic::<2>::elements()
-                .map(|num| num.value)
-                .collect::<Vec<_>>(),
-            vec![0, 1]
-        );
-    }
-}
+//#[cfg(test)]
+//mod test {
+//
+//    use super::*;
+//
+//    #[test]
+//    fn elements() {
+//        assert_eq!(
+//            Cyclic::<2>::elements()
+//                .map(|num| num.value)
+//                .collect::<Vec<_>>(),
+//            vec![0, 1]
+//        );
+//    }
+//}

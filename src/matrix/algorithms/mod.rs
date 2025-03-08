@@ -1,1 +1,1 @@
-mod smith_unoptimized;
+mod smith;

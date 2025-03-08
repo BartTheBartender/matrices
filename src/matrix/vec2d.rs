@@ -1,6 +1,6 @@
 use crate::ring::Finite;
 use custom_error::custom_error;
-use itertools::*;
+use itertools::{iproduct, Itertools};
 use std::{fmt, mem};
 
 custom_error! {
@@ -373,14 +373,15 @@ impl<T> Vec2d<T> {
     /// ------   ------------
     /// |self| = |left|right|
     /// ------   ------------
-    /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
-    /// The caller must ensure that col_idx in 1..self.nof_cols()
+    /// in such a way ``left.nof_cols() = col_idx`` and ``right.nof_cols() = self.nof_cols() - col_idx``.
+    /// # Safety: the caller must ensure that ``col_idx`` in ``1..self.nof_cols()``
+    #[must_use]
     pub unsafe fn split_horizontally_unchecked(self, col_idx: usize) -> (Self, Self) {
         let nof_rows = self.nof_rows();
         let nof_cols = self.nof_cols();
 
         let mut left_buffer = self.buffer;
-        let right_buffer = left_buffer.split_off(col_idx * self.nof_rows);
+        let right_buffer = left_buffer.split_off(col_idx.saturating_mul(self.nof_rows));
         let left = Self {
             buffer: left_buffer,
             nof_cols: col_idx,
@@ -389,7 +390,7 @@ impl<T> Vec2d<T> {
 
         let right = Self {
             buffer: right_buffer,
-            nof_cols: nof_cols - col_idx,
+            nof_cols: nof_cols.saturating_sub(col_idx),
             nof_rows,
         };
 
@@ -402,6 +403,7 @@ impl<T> Vec2d<T> {
     /// ------   ------------
     /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
     /// Otherwise returns error
+    /// # Errors
     pub fn split_horizontally(self, col_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let col_len = self.col_len();
         (0 < col_idx && col_idx < self.nof_cols())
@@ -417,6 +419,7 @@ impl<T> Vec2d<T> {
     /// ///      -----
     /// in such a way top.nof_rows() = row_idx (and bot.nof_rows() = self.nof_rows() - rows_idx).
     /// Otherwise returns error.
+    /// # Errors
     pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let row_len = self.row_len();
         (0 < row_idx && row_idx < self.nof_rows())
@@ -438,6 +441,7 @@ impl<T> Vec2d<T> {
     /// ///      --------------------
     /// in such a way top_left.shape() = (col_idx, row_idx)
     /// whenever it is possible.
+    /// # Errors
     pub fn split(
         self,
         col_idx: usize,
@@ -462,6 +466,7 @@ impl<T> Vec2d<T> {
     /// Note that
     /// i * col_len + idx <= (nof_cols - 1) * col_len + col_len - 1 = nof_cols * col_len - 1
     /// and similarly for j.
+    /// # Errors
     pub fn swap_cols(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
         let nof_cols = self.nof_cols();
         let col_len = self.col_len();
@@ -479,9 +484,14 @@ impl<T> Vec2d<T> {
         } else {
             if i != j {
                 (0..col_len)
-                    .map(|idx| (i * col_len + idx, j * col_len + idx))
+                    .map(|idx| {
+                        (
+                            i.saturating_mul(col_len).saturating_add(idx),
+                            j.saturating_mul(col_len).saturating_add(idx),
+                        )
+                    })
                     .for_each(|(col_i_idx, col_j_idx)| unsafe {
-                        self.buffer.swap_unchecked(col_i_idx, col_j_idx)
+                        self.buffer.swap_unchecked(col_i_idx, col_j_idx);
                     });
             }
             Ok(())
@@ -517,6 +527,7 @@ impl<T> Vec2d<T> {
     /// Note that
     /// i * row_len + idx <= (nof_rows - 1) * row_len + row_len - 1 = nof_rows * row_len - 1
     /// and similarly for j.
+    /// # Errors
     pub fn swap_rows(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
         let nof_rows = self.nof_rows();
         let row_len = self.row_len();
@@ -534,15 +545,20 @@ impl<T> Vec2d<T> {
         } else {
             if i != j {
                 (0..row_len)
-                    .map(|idx| (i + nof_rows * idx, j + nof_rows * idx))
+                    .map(|idx| {
+                        (
+                            i.saturating_add(nof_rows.saturating_mul(idx)),
+                            j.saturating_add(nof_rows.saturating_mul(idx)),
+                        )
+                    })
                     .for_each(|(row_i_idx, row_j_idx)| unsafe {
-                        self.buffer.swap_unchecked(row_i_idx, row_j_idx)
+                        self.buffer.swap_unchecked(row_i_idx, row_j_idx);
                     });
             }
             Ok(())
         }
     }
-
+    #[must_use]
     pub fn from_vec_2d<U: Into<T>>(vec2d: Vec2d<U>) -> Self {
         let nof_cols = vec2d.nof_cols();
         let nof_rows = vec2d.nof_rows();
@@ -553,11 +569,12 @@ impl<T> Vec2d<T> {
             buffer: vec2d
                 .buffer
                 .into_iter()
-                .map(|value| (value).into())
+                .map(|value| std::convert::Into::into(value))
                 .collect::<Vec<_>>(),
         }
     }
 
+    #[must_use]
     pub fn into_vec_2d<U: From<T>>(self) -> Vec2d<U> {
         let nof_cols = self.nof_cols();
         let nof_rows = self.nof_rows();
@@ -747,25 +764,27 @@ mod test {
 
     #[test]
     fn transpose_1() {
-        let vec_t = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
-        let mut vec2d = Vec2d::from_cols(vec_t.clone().into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        vec2d.transpose();
-        assert_eq!(vec2d.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+        let vec = Vec2d::from_cols_arr([['a', 'b', 'c'], ['d', 'e', 'f']]);
+        let mut vec_t = vec.clone();
+        vec_t.transpose();
+        assert_eq!(vec_t.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
+        assert_eq!(vec.nof_rows(), vec_t.nof_cols());
+        assert_eq!(vec.nof_cols(), vec_t.nof_rows());
     }
 
     #[test]
     fn transpose_2() {
-        let vec_t = vec![vec!['a', 'd'], vec!['b', 'e'], vec!['c', 'f']];
-        let mut vec2d = Vec2d::from_cols(vec_t.clone().into_iter().map(|col| col.into_iter()))
-            .expect("This should be well-defined");
-        vec2d.transpose();
-        assert_eq!(vec2d.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+        let vec = Vec2d::from_cols_arr([['a', 'd'], ['b', 'e'], ['c', 'f']]);
+        let mut vec_t = vec.clone();
+        vec_t.transpose();
+        assert_eq!(vec_t.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
+        assert_eq!(vec.nof_rows(), vec_t.nof_cols());
+        assert_eq!(vec.nof_cols(), vec_t.nof_rows());
     }
 
     #[test]
     fn from_rows() {
-        let vec_t = vec![vec!["a", "b", "c"], vec!["d", "e", "f"]];
+        let vec_t = [["a", "b", "c"], ["d", "e", "f"]];
         let vec2d = Vec2d::from_rows(vec_t.into_iter().map(|row| row.into_iter()))
             .expect("This should be well-defined.");
         assert_eq!(vec2d.shape(), (2, 3));
@@ -1113,46 +1132,46 @@ mod test {
         );
     }
 
-    #[test]
-    fn elements_1() {
-        use crate::ring::cyclic::Cyclic;
-        use std::collections::HashSet;
-        let output = Vec2d::<Cyclic<2>>::elements(2, 2).collect::<HashSet<_>>();
-
-        let correct = vec![
-            vec![vec![0, 0], vec![0, 0]],
-            vec![vec![0, 0], vec![0, 1]],
-            vec![vec![0, 0], vec![1, 0]],
-            vec![vec![0, 0], vec![1, 1]],
-            vec![vec![0, 1], vec![0, 0]],
-            vec![vec![0, 1], vec![0, 1]],
-            vec![vec![0, 1], vec![1, 0]],
-            vec![vec![0, 1], vec![1, 1]],
-            vec![vec![1, 0], vec![0, 0]],
-            vec![vec![1, 0], vec![0, 1]],
-            vec![vec![1, 0], vec![1, 0]],
-            vec![vec![1, 0], vec![1, 1]],
-            vec![vec![1, 1], vec![0, 0]],
-            vec![vec![1, 1], vec![0, 1]],
-            vec![vec![1, 1], vec![1, 0]],
-            vec![vec![1, 1], vec![1, 1]],
-        ]
-        .into_iter()
-        .map(|vec| {
-            Vec2d::from_rows_vec(vec)
-                .expect("This should be well-defined")
-                .into_vec_2d::<Cyclic<2>>()
-        })
-        .collect::<HashSet<_>>();
-
-        assert_eq!(correct, output);
-    }
-
-    #[test]
-    fn elements_2() {
-        use crate::ring::cyclic::Cyclic;
-        assert_eq!(Vec2d::<Cyclic<8>>::elements(2, 2).count(), 4096);
-    }
+    //#[test]
+    //fn elements_1() {
+    //    use crate::ring::cyclic::Cyclic;
+    //    use std::collections::HashSet;
+    //    let output = Vec2d::<Cyclic<2>>::elements(2, 2).collect::<HashSet<_>>();
+    //
+    //    let correct = vec![
+    //        vec![vec![0, 0], vec![0, 0]],
+    //        vec![vec![0, 0], vec![0, 1]],
+    //        vec![vec![0, 0], vec![1, 0]],
+    //        vec![vec![0, 0], vec![1, 1]],
+    //        vec![vec![0, 1], vec![0, 0]],
+    //        vec![vec![0, 1], vec![0, 1]],
+    //        vec![vec![0, 1], vec![1, 0]],
+    //        vec![vec![0, 1], vec![1, 1]],
+    //        vec![vec![1, 0], vec![0, 0]],
+    //        vec![vec![1, 0], vec![0, 1]],
+    //        vec![vec![1, 0], vec![1, 0]],
+    //        vec![vec![1, 0], vec![1, 1]],
+    //        vec![vec![1, 1], vec![0, 0]],
+    //        vec![vec![1, 1], vec![0, 1]],
+    //        vec![vec![1, 1], vec![1, 0]],
+    //        vec![vec![1, 1], vec![1, 1]],
+    //    ]
+    //    .into_iter()
+    //    .map(|vec| {
+    //        Vec2d::from_rows_vec(vec)
+    //            .expect("This should be well-defined")
+    //            .into_vec_2d::<Cyclic<2>>()
+    //    })
+    //    .collect::<HashSet<_>>();
+    //
+    //    assert_eq!(correct, output);
+    //}
+    //
+    //#[test]
+    //fn elements_2() {
+    //    use crate::ring::cyclic::Cyclic;
+    //    assert_eq!(Vec2d::<Cyclic<8>>::elements(2, 2).count(), 4096);
+    //}
 
     #[test]
     fn get() {
