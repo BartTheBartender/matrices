@@ -16,6 +16,7 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(inherent_associated_types)]
 #![feature(strict_overflow_ops)]
 #![feature(concat_idents)]
+#![feature(associated_type_defaults)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
