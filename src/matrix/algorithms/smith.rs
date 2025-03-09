@@ -1,15 +1,11 @@
 use crate::{matrix::Matrix, ring::Euclidian};
-use std::{
-    fmt::{Debug, Display},
-    ops::Not,
-};
+use std::ops::Not;
 
 #[allow(
     non_snake_case,
     clippy::arithmetic_side_effects,
     reason = "this is a matrix algorithm"
 )]
-//impl<R: Euclidian> Matrix<R> {
 impl<R: Euclidian> Matrix<R> {
     /// Returns the element in the principal minor in the submatrix ``A[minor_idx..][minor_idx..]`` with the smallest ``R::norm()``.
     fn pivot(&self, minor_idx: usize) -> Option<(usize, usize)> {
@@ -50,7 +46,7 @@ impl<R: Euclidian> Matrix<R> {
             *A.get(minor_idx, minor_idx)
                 .expect("The indices are in proper bounds.")
                 != R::zero(),
-            "The pivot in clear_col cannot be zero."
+            "The pivot in clear_row cannot be zero."
         );
         for col_idx in minor_idx.saturating_add(1)..A.nof_cols() {
             while *A
@@ -88,12 +84,47 @@ impl<R: Euclidian> Matrix<R> {
         }
     }
 
-    fn clear_col(A: &mut Self, S: &mut Self, minor_idx: usize) {
-        A.transpose();
-        S.transpose();
-        Self::clear_row(A, S, minor_idx); // ``A^T * S^T = (SA) ^T ``
-        A.transpose();
-        S.transpose();
+    fn clear_col(A: &mut Self, Q: &mut Self, minor_idx: usize) {
+        debug_assert!(
+            *A.get(minor_idx, minor_idx)
+                .expect("The indices are in proper bounds.")
+                != R::zero(),
+            "The pivot in clear_col cannot be zero."
+        );
+        for row_idx in minor_idx.saturating_add(1)..A.nof_rows() {
+            while *A
+                .get(row_idx, minor_idx)
+                .expect("The indices are in proper bounds.")
+                != R::zero()
+            {
+                let (q, r) = R::divide_with_reminder(
+                    *A.get(row_idx, minor_idx)
+                        .expect("The indices in A are in proper bounds."),
+                    *A.get(minor_idx, minor_idx)
+                        .expect("The indices in T are in proper bounds."),
+                );
+                A.add_muled_row_to_row(-q, minor_idx, row_idx)
+                    .expect("Addition of row to row in A will succeed.");
+                Q.add_muled_row_to_row(-q, minor_idx, row_idx)
+                    .expect("Addition of row to row in T will succeed.");
+                if *A
+                    .get(row_idx, minor_idx)
+                    .expect("The indices in A are in proper bounds.")
+                    != R::zero()
+                {
+                    A.swap_rows(minor_idx, row_idx)
+                        .expect("Swapping cols in A will succeed.");
+                    Q.swap_rows(minor_idx, row_idx)
+                        .expect("Swapping cols in Q will succeed.");
+                    debug_assert!(
+                        *A.get(minor_idx, minor_idx)
+                            .expect("The pivot should be in proper bounds.")
+                            == r,
+                        "After performing the reduction this should be the pivot."
+                    );
+                }
+            }
+        }
     }
 
     #[must_use]
