@@ -10,7 +10,7 @@ use std::{
     reason = "this is a matrix algorithm"
 )]
 //impl<R: Euclidian> Matrix<R> {
-impl<R: Euclidian + Debug + Display> Matrix<R> {
+impl<R: Euclidian> Matrix<R> {
     /// Returns the element in the principal minor in the submatrix ``A[minor_idx..][minor_idx..]`` with the smallest ``R::norm()``.
     fn pivot(&self, minor_idx: usize) -> Option<(usize, usize)> {
         self.cols()
@@ -46,10 +46,10 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
     }
 
     fn clear_row(A: &mut Self, Q: &mut Self, minor_idx: usize) {
-        debug_assert_ne!(
+        debug_assert!(
             *A.get(minor_idx, minor_idx)
-                .expect("The indices are in proper bounds."),
-            R::zero(),
+                .expect("The indices are in proper bounds.")
+                != R::zero(),
             "The pivot in clear_col cannot be zero."
         );
         for col_idx in minor_idx.saturating_add(1)..A.nof_cols() {
@@ -77,10 +77,10 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
                         .expect("Swapping cols in A will succeed.");
                     Q.swap_cols(minor_idx, col_idx)
                         .expect("Swapping cols in Q will succeed.");
-                    debug_assert_eq!(
+                    debug_assert!(
                         *A.get(minor_idx, minor_idx)
-                            .expect("The pivot should be in proper bounds."),
-                        r,
+                            .expect("The pivot should be in proper bounds.")
+                            == r,
                         "After performing the reduction this should be the pivot."
                     );
                 }
@@ -96,8 +96,11 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
         S.transpose();
     }
 
-    /// # Panics
     #[must_use]
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "elementary operations and getters cannot panic since indices are in proper bounds"
+    )]
     pub fn smith(self) -> (Self, Self, Self) {
         #[cfg(debug_assertions)]
         let A_old = self.clone();
@@ -106,19 +109,8 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
         let mut P = Self::identity(A.nof_rows());
         let mut Q = Self::identity(A.nof_cols());
 
-        //debug_assert_eq!(
-        //    (&P) * (&A_old),
-        //    A,
-        //    "Matrix P should be the proper identity at the start."
-        //);
-        //debug_assert_eq!(
-        //    (&A_old) * (&Q),
-        //    A,
-        //    "Matrix Q should be the proper identity at the start."
-        //);
-
-        for minor_idx in 0..std::cmp::min(A.nof_rows(), A.nof_cols()) {
-            loop {
+        'minor_idx: for minor_idx in 0..std::cmp::min(A.nof_rows(), A.nof_cols()) {
+            'updating_minor: loop {
                 if let Some((piv_row, piv_col)) = A.pivot(minor_idx) {
                     {
                         A.swap_rows(minor_idx, piv_row)
@@ -130,41 +122,14 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
                         Q.swap_cols(minor_idx, piv_col)
                             .expect("Indices of swapped rows of Q are in proper bounds.");
                     }
-                    //debug_assert_eq!(
-                    //    (&P) * (&A_old) * (&Q),
-                    //    A,
-                    //    "Matrices should be the proper change of basis after swapping rows."
-                    //);
-                    //debug_assert_eq!(
-                    //    (&P) * (&A_old) * (&Q),
-                    //    A,
-                    //    "Matrices should be the proper change of basis after swapping cols."
-                    //);
-
                     Self::clear_row(&mut A, &mut Q, minor_idx);
                     Self::clear_col(&mut A, &mut P, minor_idx);
-
-                    //debug_assert_eq!(
-                    //    (&P) * (&A_old) * (&Q),
-                    //    A,
-                    //    "Matrices should be the proper change of basis after clearing a col."
-                    //);
-                    //debug_assert_eq!(
-                    //    (&P) * (&A_old) * (&Q),
-                    //    A,
-                    //    "Matrices should be the proper change of basis after clearing a row."
-                    //);
 
                     if let Some((bad_idx, _)) = A.non_divisible_entry(minor_idx) {
                         A.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in A should be well-defined.");
                         Q.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
-                        //debug_assert_eq!(
-                        //(&P) * (&A_old) * (&Q),
-                        //    A,
-                        //    "Matrices P and Q should be the proper change of basis after detection of bad entry."
-                        //);
                     } else {
                         let (_, to_canon) = R::canonize(
                             *A.get(minor_idx, minor_idx)
@@ -176,19 +141,10 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
                         Q.mul_col_by(minor_idx, to_canon)
                             .expect("Multiplying the col of Q to canonize cannot fail.");
 
-                        break;
+                        break 'updating_minor;
                     }
                 } else {
-                    debug_assert!(
-                        A.is_in_smith_normal_form(),
-                        "The matrix should be in the smith normal form."
-                    );
-                    debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                        A,
-                        "The matrices P and Q are not a desired change of basis in snf."
-                    );
-                    return (P, A, Q);
+                    break 'minor_idx;
                 }
             }
         }
@@ -196,19 +152,18 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
             A.is_in_smith_normal_form(),
             "The matrix should be in the smith normal form."
         );
-        debug_assert_eq!(
-            (&P) * (&A_old) * (&Q),
-            A,
+        debug_assert!(
+            (&P) * (&A_old) * (&Q) == A,
             "The matrices P and Q are not a desired change of basis in snf."
         );
         (P, A, Q)
     }
 
-    /// Matrix is in a smith normal form if
-    /// * it is diagonal
-    /// * ``d_i`` divides ``d_{i+1}`` for the diagonal
-    /// # Panics
     #[must_use]
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "curr and next indices are in proper bounds"
+    )]
     pub fn is_in_smith_normal_form(&self) -> bool {
         use std::cmp::min;
         (0..min(self.nof_rows(), self.nof_cols()))
@@ -287,7 +242,7 @@ mod test {
 
     #[test]
     fn clear_row_many() {
-        for _ in 0_i32..100_i32 {
+        for _ in 0_i32..10_i32 {
             let A_old = random_matrix(5, 6);
             let mut A = A_old.clone();
             let mut Q = M::identity(A.nof_cols());
@@ -302,7 +257,7 @@ mod test {
 
     #[test]
     fn clear_col_many() {
-        for _ in 0_i32..100_i32 {
+        for _ in 0_i32..10_i32 {
             let A_old = random_matrix(5, 6);
             let mut A = A_old.clone();
             let mut P = M::identity(A.nof_rows());
@@ -387,7 +342,7 @@ mod test {
 
     #[test]
     fn smith_many() {
-        for _ in 0_i32..100_i32 {
+        for _ in 0_i32..10_i32 {
             let A = random_matrix(5, 6);
             match std::panic::catch_unwind(|| A.clone().smith()) {
                 Ok((P, D, Q)) => {

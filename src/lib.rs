@@ -15,7 +15,7 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(result_flattening)]
 #![feature(inherent_associated_types)]
 #![feature(strict_overflow_ops)]
-
+#![feature(concat_idents)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -104,5 +104,5 @@ pub mod matrix;
 pub mod ring;
 
 #[cfg(test)]
-mod playground {
+pub mod playground {
 }
