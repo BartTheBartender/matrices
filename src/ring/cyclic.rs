@@ -74,16 +74,6 @@ impl<const N: u64> Ring for Cyclic<N> {
     fn one() -> Self {
         Self { value: 1 }
     }
-}
-
-impl<const N: u64> Bezout for Cyclic<N> {
-    fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
-        let (gcd, x, y) = Integer::gcd(
-            a.value.try_into().expect("This should be convertable."),
-            b.value.try_into().expect("This should be convertable."),
-        );
-        (Self::from(gcd), Self::from(x), Self::from(y))
-    }
 
     fn try_divide(a: Self, b: Self) -> Option<Self> {
         let a_v = a.value.try_into().expect("The overflow should not occur.");
@@ -102,6 +92,17 @@ impl<const N: u64> Bezout for Cyclic<N> {
     fn canonize(a: Self) -> (Self, Self) {
         todo!()
     }
+}
+
+impl<const N: u64> Bezout for Cyclic<N> {
+    fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
+        let (gcd, x, y) = Integer::gcd(
+            a.value.try_into().expect("This should be convertable."),
+            b.value.try_into().expect("This should be convertable."),
+        );
+        (Self::from(gcd), Self::from(x), Self::from(y))
+    }
+
 }
 
 //impl<const N: u64> Finite for Cyclic<N> {

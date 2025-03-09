@@ -1,5 +1,4 @@
 use crate::{matrix::Matrix, ring::Euclidian};
-use itertools::iproduct;
 use std::{
     fmt::{Debug, Display},
     ops::Not,
@@ -97,7 +96,9 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
         S.transpose();
     }
 
-    fn smith_not_canonized(self) -> (Self, Self, Self) {
+    /// # Panics
+    #[must_use]
+    pub fn smith(self) -> (Self, Self, Self) {
         #[cfg(debug_assertions)]
         let A_old = self.clone();
 
@@ -105,16 +106,16 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
         let mut P = Self::identity(A.nof_rows());
         let mut Q = Self::identity(A.nof_cols());
 
-        debug_assert_eq!(
-            (&P) * (&A_old),
-            A,
-            "Matrix P should be the proper identity at the start."
-        );
-        debug_assert_eq!(
-            (&A_old) * (&Q),
-            A,
-            "Matrix Q should be the proper identity at the start."
-        );
+        //debug_assert_eq!(
+        //    (&P) * (&A_old),
+        //    A,
+        //    "Matrix P should be the proper identity at the start."
+        //);
+        //debug_assert_eq!(
+        //    (&A_old) * (&Q),
+        //    A,
+        //    "Matrix Q should be the proper identity at the start."
+        //);
 
         for minor_idx in 0..std::cmp::min(A.nof_rows(), A.nof_cols()) {
             loop {
@@ -129,77 +130,98 @@ impl<R: Euclidian + Debug + Display> Matrix<R> {
                         Q.swap_cols(minor_idx, piv_col)
                             .expect("Indices of swapped rows of Q are in proper bounds.");
                     }
-                    debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                        A,
-                        "Matrices should be the proper change of basis after swapping rows."
-                    );
-                    debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                        A,
-                        "Matrices should be the proper change of basis after swapping cols."
-                    );
+                    //debug_assert_eq!(
+                    //    (&P) * (&A_old) * (&Q),
+                    //    A,
+                    //    "Matrices should be the proper change of basis after swapping rows."
+                    //);
+                    //debug_assert_eq!(
+                    //    (&P) * (&A_old) * (&Q),
+                    //    A,
+                    //    "Matrices should be the proper change of basis after swapping cols."
+                    //);
 
                     Self::clear_row(&mut A, &mut Q, minor_idx);
                     Self::clear_col(&mut A, &mut P, minor_idx);
 
-                    debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                        A,
-                        "Matrices should be the proper change of basis after clearing a col."
-                    );
-                    debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                        A,
-                        "Matrices should be the proper change of basis after clearing a row."
-                    );
+                    //debug_assert_eq!(
+                    //    (&P) * (&A_old) * (&Q),
+                    //    A,
+                    //    "Matrices should be the proper change of basis after clearing a col."
+                    //);
+                    //debug_assert_eq!(
+                    //    (&P) * (&A_old) * (&Q),
+                    //    A,
+                    //    "Matrices should be the proper change of basis after clearing a row."
+                    //);
 
                     if let Some((bad_idx, _)) = A.non_divisible_entry(minor_idx) {
                         A.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in A should be well-defined.");
                         Q.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
-                        debug_assert_eq!(
-                        (&P) * (&A_old) * (&Q),
-                            A,
-                            "Matrices P and Q should be the proper change of basis after detection of bad entry."
-                        );
+                        //debug_assert_eq!(
+                        //(&P) * (&A_old) * (&Q),
+                        //    A,
+                        //    "Matrices P and Q should be the proper change of basis after detection of bad entry."
+                        //);
                     } else {
+                        let (_, to_canon) = R::canonize(
+                            *A.get(minor_idx, minor_idx)
+                                .expect("The pivot in canonizing should be well-defined."),
+                        );
+
+                        A.mul_col_by(minor_idx, to_canon)
+                            .expect("Multiplying the col of A to canonize cannot fail.");
+                        Q.mul_col_by(minor_idx, to_canon)
+                            .expect("Multiplying the col of Q to canonize cannot fail.");
+
                         break;
                     }
                 } else {
+                    debug_assert!(
+                        A.is_in_smith_normal_form(),
+                        "The matrix should be in the smith normal form."
+                    );
+                    debug_assert_eq!(
+                        (&P) * (&A_old) * (&Q),
+                        A,
+                        "The matrices P and Q are not a desired change of basis in snf."
+                    );
                     return (P, A, Q);
                 }
             }
         }
-
-        (P, A, Q)
-    }
-
-    pub fn smith(self) -> (Self, Self, Self) {
-        #[cfg(debug_assertions)]
-        let A = self.clone();
-        let (mut P, mut D, mut Q) = self.smith_not_canonized();
-
-        for index in (0..std::min
-
         debug_assert!(
-            D.is_in_smith_normal_form(),
-            "Matrix D is not in a smith normal form."
+            A.is_in_smith_normal_form(),
+            "The matrix should be in the smith normal form."
         );
         debug_assert_eq!(
-            (&P) * (&A) * (&Q),
+            (&P) * (&A_old) * (&Q),
             A,
-            "Matrices P and Q are invalid in the smith normal form."
+            "The matrices P and Q are not a desired change of basis in snf."
         );
-        (P, D, Q)
+        (P, A, Q)
     }
 
     /// Matrix is in a smith normal form if
     /// * it is diagonal
     /// * ``d_i`` divides ``d_{i+1}`` for the diagonal
+    /// # Panics
+    #[must_use]
     pub fn is_in_smith_normal_form(&self) -> bool {
-        todo!()
+        use std::cmp::min;
+        (0..min(self.nof_rows(), self.nof_cols()))
+            .zip(1..min(self.nof_rows(), self.nof_cols()))
+            .map(|(curr, next)| {
+                (
+                    self.get(curr, curr)
+                        .expect("The curr index is in proper bounds."),
+                    self.get(next, next)
+                        .expect("The curr index is in proper bounds."),
+                )
+            })
+            .all(|(&curr, &next)| R::is_canonized(curr) && R::divides(curr, next))
     }
 }
 

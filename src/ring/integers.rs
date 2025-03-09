@@ -12,6 +12,14 @@ impl Ring for Integer {
     fn one() -> Self {
         1
     }
+
+    fn try_divide(a: Self, b: Self) -> Option<Self> {
+        (b != 0 && a % b == 0).then(|| a / b)
+    }
+
+    fn canonize(a: Self) -> (Self, Self) {
+        (a.abs(), a.signum())
+    }
 }
 
 impl Bezout for Integer {
@@ -34,13 +42,6 @@ impl Bezout for Integer {
         )
     }
 
-    fn try_divide(a: Self, b: Self) -> Option<Self> {
-        (b != 0 && a % b == 0).then(|| a / b)
-    }
-
-    fn canonize(a: Self) -> (Self, Self) {
-        (a.abs(), a.signum())
-    }
 }
 
 impl Noetherian for Integer {}

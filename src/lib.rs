@@ -3,7 +3,6 @@
 #![feature(let_chains)]
 #![feature(btree_extract_if)]
 #![feature(iterator_try_collect)]
-#![feature(extract_if)]
 #![feature(trait_alias)]
 #![feature(slice_swap_unchecked)]
 /* this feature is necessary to constrain matrices,

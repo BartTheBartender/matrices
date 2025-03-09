@@ -30,11 +30,7 @@ pub trait Ring: AbelianGroup + Mul<Output = Self> + From<Integer> {
             .map(|(left, right)| left * right)
             .sum()
     }
-}
 
-pub trait Bezout: Ring {
-    /// Returns (g,x,y) such that ax + by = g and g = gcd(a,b)
-    fn gcd(a: Self, b: Self) -> (Self, Self, Self);
     fn try_divide(a: Self, b: Self) -> Option<Self>;
 
     /// determines if there exists c such that b = a * c
@@ -54,6 +50,16 @@ pub trait Bezout: Ring {
     /// * a_canon is the element representing U(R) * a
     /// * a * to_canon = to_canon
     fn canonize(a: Self) -> (Self, Self);
+
+    fn is_canonized(a: Self) -> bool {
+        let (a_canon, _) = Self::canonize(a);
+        a_canon == a
+    }
+}
+
+pub trait Bezout: Ring {
+    /// Returns (g,x,y) such that ax + by = g and g = gcd(a,b)
+    fn gcd(a: Self, b: Self) -> (Self, Self, Self);
 }
 
 /// In Rust this can be only a formal statement without real code.
