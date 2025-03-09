@@ -1,5 +1,5 @@
 pub mod algorithms;
-mod vec2d;
+pub mod vec2d;
 
 use crate::ring::Ring;
 use custom_error::custom_error;
@@ -17,12 +17,41 @@ custom_error! {
 pub type Matrix<R: Ring> = Vec2d<R>;
 
 impl<R: Ring> Matrix<R> {
+    pub fn is_upper_triangular(&self) -> bool {
+        (1..self.nof_cols()).all(|j| {
+            self.col(j)
+                .expect("The col_idx is in proper bounds.")
+                .take(j-1) // all such aij with i < j
+                .all(|aij| *aij == R::zero())
+        })
+    }
+
+    pub fn is_lower_triangular(&self) -> bool {
+        (0..self.nof_cols()).all(|j| {
+            self.col(j)
+                .expect("The col_idx is in proper bounds.")
+                .skip(j+1) // all such aij with i > j
+                .all(|aij| *aij == R::zero())
+        })
+    }
+
+    pub fn is_diagonal(&self) -> bool {
+        self.is_upper_triangular() && self.is_lower_triangular()
+    }
+
     pub fn zero(nof_rows: usize, nof_cols: usize) -> Self {
         Self {
             nof_cols,
             nof_rows,
             buffer: vec![R::zero(); nof_cols * nof_rows],
         }
+    }
+
+    pub fn identity(nof_rows: usize) -> Self {
+        let mut id = Self::zero(nof_rows, nof_rows);
+        (0..nof_rows)
+            .for_each(|i| *id.get_mut(i, i).expect("This should be in proper bounds") = R::one());
+        id
     }
 
     pub fn mul_col_by(&mut self, col_idx: usize, r: R) -> Result<(), MatrixError> {
@@ -258,9 +287,7 @@ impl<R: Ring> Matrix<R> {
             .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
             .flatten()
     }
-}
 
-impl<R: Ring + std::fmt::Display> Matrix<R> {
     /// For given matrix a, returns a^n such that a^n=a^{n+1}
     /// or None if such power doesn't exists.
     pub fn infinite_power(&self) -> Option<Self> {
@@ -381,7 +408,7 @@ impl<R: Ring> Sub<Matrix<R>> for Matrix<R> {
 
 /// Negation
 impl<R: Ring> Neg for Matrix<R> {
-    type Output = Matrix<R>;
+    type Output = Self;
     fn neg(self) -> Self::Output {
         let nof_cols = self.nof_cols();
         let nof_rows = self.nof_rows();
@@ -506,10 +533,28 @@ mod test {
     type M = Matrix<Integer>;
 
     #[test]
+    fn upper_triangular() {
+        assert!(M::from_rows_arr([[1,0,0,0],[2,1,0,0],[3,78,9,0]]).is_upper_triangular());
+    }
+
+    //#[test]
+    //fn lower_triangular() {
+    //    assert!(M::from_rows_arr([[]]).is_lower_triangular());
+    //}
+
+    #[test]
     fn zero() {
         assert_eq!(
             M::zero(3, 2).into_rows_vec(),
             vec![vec![0, 0], vec![0, 0], vec![0, 0]]
+        );
+    }
+
+    #[test]
+    fn identity() {
+        assert_eq!(
+            M::identity(3).into_rows_vec(),
+            vec![vec![1, 0, 0], vec![0, 1, 0], vec![0, 0, 1]]
         );
     }
 

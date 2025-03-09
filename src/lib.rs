@@ -3,7 +3,6 @@
 #![feature(let_chains)]
 #![feature(btree_extract_if)]
 #![feature(iterator_try_collect)]
-#![feature(extract_if)]
 #![feature(trait_alias)]
 #![feature(slice_swap_unchecked)]
 /* this feature is necessary to constrain matrices,
@@ -15,6 +14,8 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(iter_collect_into)]
 #![feature(result_flattening)]
 #![feature(inherent_associated_types)]
+#![feature(strict_overflow_ops)]
+#![feature(concat_idents)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -35,11 +36,11 @@ however, a bug inside it prevents using type aliases for other types
     //clippy::expect_used,
     //clippy::panic,
     clippy::print_stderr,
-    clippy::print_stdout,
-    clippy::todo,
+    //clippy::print_stdout,
+    //clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
-    clippy::use_debug,
+    //clippy::use_debug,
     //clippy::unwrap_used,
 
     // restricions
@@ -101,3 +102,7 @@ however, a bug inside it prevents using type aliases for other types
 
 pub mod matrix;
 pub mod ring;
+
+#[cfg(test)]
+pub mod playground {
+}

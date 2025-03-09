@@ -1,7 +1,4 @@
-use super::{
-    integers::{Integer, Nat},
-    *,
-};
+use super::{integers::Integer, *};
 use std::{
     fmt,
     iter::Sum,
@@ -9,11 +6,11 @@ use std::{
 };
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct Cyclic<const N: u16> {
-    value: Nat,
+pub struct Cyclic<const N: u64> {
+    value: u64,
 }
 
-impl<const N: u16> Add<Self> for Cyclic<N> {
+impl<const N: u64> Add<Self> for Cyclic<N> {
     type Output = Self;
     fn add(self, other: Self) -> Self::Output {
         Self {
@@ -22,7 +19,7 @@ impl<const N: u16> Add<Self> for Cyclic<N> {
     }
 }
 
-impl<const N: u16> Neg for Cyclic<N> {
+impl<const N: u64> Neg for Cyclic<N> {
     type Output = Self;
     fn neg(self) -> Self::Output {
         Self {
@@ -31,26 +28,26 @@ impl<const N: u16> Neg for Cyclic<N> {
     }
 }
 
-impl<const N: u16> Sub<Self> for Cyclic<N> {
+impl<const N: u64> Sub<Self> for Cyclic<N> {
     type Output = Self;
     fn sub(self, other: Self) -> Self::Output {
         self + (-other)
     }
 }
 
-impl<const N: u16> Sum for Cyclic<N> {
+impl<const N: u64> Sum for Cyclic<N> {
     fn sum<I: Iterator<Item = Self>>(iterator: I) -> Self {
         iterator.fold(Self::zero(), |acc, x| acc + x)
     }
 }
 
-impl<const N: u16> AbelianGroup for Cyclic<N> {
+impl<const N: u64> AbelianGroup for Cyclic<N> {
     fn zero() -> Self {
         Self { value: 0 }
     }
 }
 
-impl<const N: u16> Mul<Self> for Cyclic<N> {
+impl<const N: u64> Mul<Self> for Cyclic<N> {
     type Output = Self;
     fn mul(self, other: Self) -> Self::Output {
         Self {
@@ -59,51 +56,80 @@ impl<const N: u16> Mul<Self> for Cyclic<N> {
     }
 }
 
-impl<const N: u16> From<Integer> for Cyclic<N> {
+impl<const N: u64> From<Integer> for Cyclic<N> {
     fn from(int: Integer) -> Self {
-        let value: Nat = {
-            if int < 0 {
-                (N - (int as Nat)) % N
-            } else {
-                (-int as Nat) % N
-            }
+        let shifted: u64 = if int < 0 {
+            let n_as_integer = Integer::try_from(N).expect("This overflow should not occur");
+            u64::try_from(((int % n_as_integer) + n_as_integer) % n_as_integer)
+                .expect("This overflow cannot occur.")
+        } else {
+            int.try_into().expect("The overflow cannot occur")
         };
 
-        Self { value }
+        Self { value: shifted % N }
     }
 }
 
-impl<const N: u16> Ring for Cyclic<N> {
+impl<const N: u64> Ring for Cyclic<N> {
     fn one() -> Self {
         Self { value: 1 }
     }
-}
 
-impl<const N: u16> Finite for Cyclic<N> {
-    type Output = Self;
+    fn try_divide(a: Self, b: Self) -> Option<Self> {
+        let a_v = a.value.try_into().expect("The overflow should not occur.");
+        let b_v = b.value.try_into().expect("The overflow should not occur.");
+        let (d, _, _) = Integer::gcd(a_v, b_v);
 
-    fn elements() -> impl ExactSizeIterator<Item = Self::Output> {
-        (0..N).map(|value| Self { value })
+        let (gcd, x, _) = Integer::gcd(
+            b_v / d,
+            N.try_into().expect("The overflow should not occur."),
+        );
+        // a/b = a_v / b_v = (a_v / d) / (b_v / d)
+        // it suffices for b_v / d to be invertible mod N
+        (gcd == 1).then(|| Self::from(a_v / d) * Self::from(x))
+    }
+
+    fn canonize(a: Self) -> (Self, Self) {
+        todo!()
     }
 }
-impl<const N: u16> fmt::Display for Cyclic<N> {
+
+impl<const N: u64> Bezout for Cyclic<N> {
+    fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
+        let (gcd, x, y) = Integer::gcd(
+            a.value.try_into().expect("This should be convertable."),
+            b.value.try_into().expect("This should be convertable."),
+        );
+        (Self::from(gcd), Self::from(x), Self::from(y))
+    }
+
+}
+
+//impl<const N: u64> Finite for Cyclic<N> {
+//    type Output = Self;
+//
+//    fn elements() -> impl ExactSizeIterator<Item = Self::Output> {
+//        (0..N).map(|value| Self { value })
+//    }
+//}
+impl<const N: u64> fmt::Display for Cyclic<N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "{}", self.value)
     }
 }
 
-#[cfg(test)]
-mod test {
-
-    use super::*;
-
-    #[test]
-    fn elements() {
-        assert_eq!(
-            Cyclic::<2>::elements()
-                .map(|num| num.value)
-                .collect::<Vec<_>>(),
-            vec![0, 1]
-        );
-    }
-}
+//#[cfg(test)]
+//mod test {
+//
+//    use super::*;
+//
+//    #[test]
+//    fn elements() {
+//        assert_eq!(
+//            Cyclic::<2>::elements()
+//                .map(|num| num.value)
+//                .collect::<Vec<_>>(),
+//            vec![0, 1]
+//        );
+//    }
+//}

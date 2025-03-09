@@ -1,6 +1,6 @@
 use super::*;
-pub type Integer = i16;
-pub type Nat = u16;
+pub type Integer = i64;
+pub type Nat = u64;
 
 impl AbelianGroup for Integer {
     fn zero() -> Self {
@@ -12,9 +12,17 @@ impl Ring for Integer {
     fn one() -> Self {
         1
     }
+
+    fn try_divide(a: Self, b: Self) -> Option<Self> {
+        (b != 0 && a % b == 0).then(|| a / b)
+    }
+
+    fn canonize(a: Self) -> (Self, Self) {
+        (a.abs(), a.signum())
+    }
 }
 
-impl PID for Integer {
+impl Bezout for Integer {
     fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
         fn gcd_helper(a: Integer, b: Integer) -> (Integer, Integer, Integer) {
             match b {
@@ -32,6 +40,19 @@ impl PID for Integer {
             x * Integer::signum(gcd),
             y * Integer::signum(gcd),
         )
+    }
+
+}
+
+impl Noetherian for Integer {}
+
+impl Euclidian for Integer {
+    fn norm(a: Self) -> Option<NonZero<Nat>> {
+        NonZero::new(a.unsigned_abs())
+    }
+
+    fn divide_with_reminder(a: Self, b: Self) -> (Self, Self) {
+        (a / b, a % b)
     }
 }
 
@@ -62,5 +83,16 @@ mod test {
             Integer::dot_product(vec![1, 2, 3].into_iter(), vec![3, 2, 1].into_iter()),
             10
         );
+    }
+
+    #[test]
+    fn divide_with_reminder() {
+        use rand::random;
+        (0..1000)
+            .map(|_| (random::<Integer>(), random::<Integer>()))
+            .for_each(|(a, b)| {
+                let (q, r) = Integer::divide_with_reminder(a, b);
+                assert_eq!(a, q * b + r)
+            });
     }
 }
