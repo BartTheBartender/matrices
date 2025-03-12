@@ -50,17 +50,8 @@ pub trait Ring: AbelianGroup + Mul<Output = Self> + From<Integer> {
 
     /// The group of units $U(R)$ acts on $R$ by left-multiplication.
     /// This function returns a pair ``(a_canon, to_canon)`` such that
-    /// * ``a_canon`` is the element representing $U(R) * a$
-    /// * ``a * to_canon = to_canon``
-    /// Calculates the binomial coefficient, also known as "n choose k".
-    ///
-    /// The formula is given by:
-    ///
-    /// $$ C(n, k) = \frac{n!}{k!(n-k)!} $$
-    ///
-    /// # Example
-    /// ```
-    /// assert_eq!(binomial_coefficient(5, 2), 10);
+    /// - ``a_canon`` is the element representing $U(R) * a$
+    /// - ``a * to_canon = to_canon``
     fn canonize(a: Self) -> (Self, Self);
 
     fn is_canonized(a: Self) -> bool {
@@ -86,7 +77,7 @@ pub trait Euclidian: Noetherian + Bezout {
 }
 
 pub trait Finite: Copy + Hash {
-    type Output = Self;
+    type Output: Copy + Hash = Self;
     /// Iterator over all the elements of the ring
     fn elements() -> impl ExactSizeIterator<Item = Self::Output>;
 }

@@ -35,14 +35,14 @@ however, a bug inside it prevents using type aliases for other types
     // debugging remnants
     clippy::dbg_macro,
     //clippy::expect_used,
-    //clippy::panic,
+    clippy::panic,
     clippy::print_stderr,
-    //clippy::print_stdout,
-    //clippy::todo,
+    clippy::print_stdout,
+    clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
-    //clippy::use_debug,
-    //clippy::unwrap_used,
+    clippy::use_debug,
+    clippy::unwrap_used,
 
     // restricions
     clippy::arithmetic_side_effects,
@@ -104,6 +104,3 @@ however, a bug inside it prevents using type aliases for other types
 pub mod matrix;
 pub mod ring;
 
-#[cfg(test)]
-pub mod playground {
-}

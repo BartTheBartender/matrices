@@ -12,8 +12,7 @@ custom_error! {
     EmptyRowsIterator = "Iterator of rows was empty.",
     DifferentColLengths{left_col_len: usize, right_col_len: usize} = "Different col_lens (left.col_len() = {left_col_len}, right.col_len() = {right_col_len}).",
     DifferentRowLengths{top_row_len: usize, bot_row_len: usize} = "Different row_lens (top.row_len() = {top_row_len}, bot.row_len() = {bot_row_len}).",
-    ColIdxOutOfBounds{col_idx: usize, col_len: usize} = "Col_idx ({col_idx}) out of bound col_len ({col_len}).",
-    RowIdxOutOfBounds{row_idx: usize, row_len: usize} = "Row_idx ({row_idx}) out of bound row_len ({row_len}).",
+    IdxOutOfBounds{idx: usize, bound: usize} = "The index {idx} should be less than {bound}.",
     Unexpected = "This bug is unexpected"
 }
 
@@ -26,65 +25,79 @@ pub struct Vec2d<T> {
 }
 
 impl<T> Vec2d<T> {
+    #[must_use]
     pub const fn nof_rows(&self) -> usize {
         self.nof_rows
     }
 
+    #[must_use]
     pub const fn nof_cols(&self) -> usize {
         self.nof_cols
     }
 
+    #[must_use]
     pub const fn col_len(&self) -> usize {
         self.nof_rows()
     }
 
+    #[must_use]
     pub const fn row_len(&self) -> usize {
         self.nof_cols()
     }
 
+    #[must_use]
     pub const fn shape(&self) -> (usize, usize) {
         (self.nof_rows(), self.nof_cols())
     }
 
+    #[must_use]
     pub const fn is_square(&self) -> bool {
         self.nof_cols() == self.nof_rows()
     }
 
+    /// # Safety
+    /// The caller must guarantee that ``i < nof_rows`` and ``j < nof_cols``.
+    #[must_use]
     pub unsafe fn get_unchecked(&self, i: usize, j: usize) -> &T {
-        self.buffer.get_unchecked(i + self.col_len() * j)
+        self.buffer
+            .get_unchecked(i.saturating_add(self.col_len().saturating_mul(j)))
     }
 
     pub fn get(&self, i: usize, j: usize) -> Result<&T, Vec2dError> {
         if i >= self.nof_rows() {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: self.nof_rows(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: self.nof_rows(),
             })
         } else if j >= self.nof_cols() {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: self.nof_cols(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: self.nof_cols(),
             })
         } else {
             Ok(unsafe { self.get_unchecked(i, j) })
         }
     }
 
-    pub unsafe fn get_unchecked_mut<'a>(&'a mut self, i: usize, j: usize) -> &'a mut T {
+    pub unsafe fn get_unchecked_mut<'vec_l>(&'vec_l mut self, i: usize, j: usize) -> &'vec_l mut T {
         let col_len = self.col_len();
         self.buffer.get_unchecked_mut(i + col_len * j)
     }
 
-    pub fn get_mut<'a>(&'a mut self, i: usize, j: usize) -> Result<&'a mut T, Vec2dError> {
+    pub fn get_mut<'vec_l>(
+        &'vec_l mut self,
+        i: usize,
+        j: usize,
+    ) -> Result<&'vec_l mut T, Vec2dError> {
         if i >= self.nof_rows() {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: self.nof_rows(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: self.nof_rows(),
             })
         } else if j >= self.nof_cols() {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: self.nof_cols(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: self.nof_cols(),
             })
         } else {
             Ok(unsafe { self.get_unchecked_mut(i, j) })
@@ -110,14 +123,15 @@ impl<T> Vec2d<T> {
         helper_buffer
             .into_iter()
             .zip(iproduct!(0..nof_rows, 0..nof_cols))
-            .map(|(value, (i, j))| (value, i + j * nof_rows))
+            .map(|(value, (i, j))| (value, i.saturating_add(j.saturating_mul(nof_rows))))
             .for_each(|(value, idx)| self.buffer[idx] = value);
     }
 
-    /// The caller must guaranttee that col_idx < self.nof_cols()
+    /// # Safety
+    /// The caller must guaranttee that ``col_idx < self.nof_cols()``.
     pub unsafe fn col_unchecked(&self, col_idx: usize) -> impl Iterator<Item = &T> {
-        let begin = col_idx * self.col_len();
-        let end = begin + self.col_len();
+        let begin = col_idx.saturating_mul(self.col_len());
+        let end = begin.saturating_add(self.col_len());
         self.buffer[begin..end].iter()
     }
 
@@ -131,9 +145,9 @@ impl<T> Vec2d<T> {
     pub fn col(&self, col_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
         (col_idx < self.nof_cols())
             .then(|| unsafe { self.col_unchecked(col_idx) })
-            .ok_or(Vec2dError::RowIdxOutOfBounds {
-                row_idx: col_idx,
-                row_len: self.nof_cols(),
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: self.nof_cols(),
             })
     }
 
@@ -141,9 +155,9 @@ impl<T> Vec2d<T> {
         let nof_cols = self.nof_cols();
         (col_idx < nof_cols)
             .then(|| unsafe { self.col_mut_unchecked(col_idx) })
-            .ok_or(Vec2dError::RowIdxOutOfBounds {
-                row_idx: col_idx,
-                row_len: nof_cols,
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: nof_cols,
             })
     }
 
@@ -237,9 +251,9 @@ impl<T> Vec2d<T> {
     pub fn row(&self, row_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
         (row_idx < self.nof_rows())
             .then(|| unsafe { self.row_unchecked(row_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds {
-                col_idx: row_idx,
-                col_len: self.nof_rows(),
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: row_idx,
+                bound: self.nof_rows(),
             })
     }
 
@@ -247,9 +261,9 @@ impl<T> Vec2d<T> {
         let nof_rows = self.nof_rows();
         (row_idx < nof_rows)
             .then(|| unsafe { self.row_mut_unchecked(row_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds {
-                col_idx: row_idx,
-                col_len: nof_rows,
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: row_idx,
+                bound: nof_rows,
             })
     }
 
@@ -408,7 +422,10 @@ impl<T> Vec2d<T> {
         let col_len = self.col_len();
         (0 < col_idx && col_idx < self.nof_cols())
             .then(|| unsafe { self.split_horizontally_unchecked(col_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds { col_idx, col_len })
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: col_len,
+            })
     }
 
     /// Given a row_idx, splits
@@ -430,7 +447,10 @@ impl<T> Vec2d<T> {
                 bot.transpose();
                 (top, bot)
             })
-            .ok_or(Vec2dError::RowIdxOutOfBounds { row_idx, row_len })
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: row_idx,
+                bound: row_len,
+            })
     }
 
     /// Given a col_idx and row_idx, splits
@@ -472,14 +492,14 @@ impl<T> Vec2d<T> {
         let col_len = self.col_len();
 
         if i >= nof_cols {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: i,
-                row_len: nof_cols,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: nof_cols,
             })
         } else if j >= nof_cols {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: nof_cols,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: nof_cols,
             })
         } else {
             if i != j {
@@ -533,14 +553,14 @@ impl<T> Vec2d<T> {
         let row_len = self.row_len();
 
         if i >= nof_rows {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: nof_rows,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: nof_rows,
             })
         } else if j >= nof_rows {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: j,
-                col_len: nof_rows,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: nof_rows,
             })
         } else {
             if i != j {
@@ -726,9 +746,9 @@ mod test {
         );
         assert_eq!(
             unsafe { vec.col(7).unwrap_err_unchecked() },
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 7,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 7,
+                bound: vec.row_len()
             }
         );
     }
@@ -749,10 +769,7 @@ mod test {
 
         assert_eq!(
             unsafe { vec1.col_mut(8).unwrap_err_unchecked() },
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 8,
-                row_len: 4
-            }
+            Vec2dError::IdxOutOfBounds { idx: 8, bound: 4 }
         );
     }
 
@@ -850,9 +867,9 @@ mod test {
         );
         assert_eq!(
             unsafe { vec.row(7).unwrap_err_unchecked() },
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 7,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 7,
+                bound: vec.col_len()
             }
         );
     }
@@ -873,10 +890,7 @@ mod test {
 
         assert_eq!(
             unsafe { vec1.row_mut(8).unwrap_err_unchecked() },
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 8,
-                col_len: 4
-            }
+            Vec2dError::IdxOutOfBounds { idx: 8, bound: 4 }
         );
     }
 
@@ -986,18 +1000,18 @@ mod test {
         let split_at_zero = vec.clone().split_horizontally(0);
         assert_eq!(
             split_at_zero.expect_err("The split should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 0,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 0,
+                bound: vec.col_len()
             }
         );
 
         let split_at_col_len = vec.clone().split_horizontally(vec.col_len());
         assert_eq!(
             split_at_col_len.expect_err("The split should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: vec.col_len(),
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: vec.col_len(),
+                bound: vec.col_len()
             }
         );
     }
@@ -1026,18 +1040,18 @@ mod test {
         let split_at_zero = vec.clone().split_vertically(0);
         assert_eq!(
             split_at_zero.expect_err("The split should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 0,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 0,
+                bound: vec.row_len()
             }
         );
 
         let split_at_row_len = vec.clone().split_vertically(vec.row_len());
         assert_eq!(
             split_at_row_len.expect_err("The split should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: vec.row_len(),
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: vec.row_len(),
+                bound: vec.row_len()
             }
         );
     }
@@ -1080,9 +1094,9 @@ mod test {
             vec.clone()
                 .swap_cols(0, 5)
                 .expect_err("The swap should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 5,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.row_len()
             }
         );
 
@@ -1090,9 +1104,9 @@ mod test {
             vec.clone()
                 .swap_cols(5, 3)
                 .expect_err("The swap should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 5,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.row_len()
             }
         );
     }
@@ -1115,9 +1129,9 @@ mod test {
             vec.clone()
                 .swap_rows(0, 5)
                 .expect_err("The swap should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 5,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.col_len()
             }
         );
 
@@ -1125,9 +1139,9 @@ mod test {
             vec.clone()
                 .swap_rows(5, 2)
                 .expect_err("The swap should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 5,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.col_len()
             }
         );
     }
