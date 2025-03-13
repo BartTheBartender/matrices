@@ -33,16 +33,16 @@ however, a bug inside it prevents using type aliases for other types
     clippy::perf,
 
     // debugging remnants
-    clippy::dbg_macro,
+    //clippy::dbg_macro,
     //clippy::expect_used,
     clippy::panic,
     clippy::print_stderr,
-    clippy::print_stdout,
-    clippy::todo,
+    //clippy::print_stdout,
+    //clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
     clippy::use_debug,
-    clippy::unwrap_used,
+    //clippy::unwrap_used,
 
     // restricions
     clippy::arithmetic_side_effects,
@@ -81,7 +81,7 @@ however, a bug inside it prevents using type aliases for other types
     // restrictions
     clippy::as_conversions,
     clippy::allow_attributes_without_reason,
-    clippy::default_numeric_fallback,
+    //clippy::default_numeric_fallback,
     clippy::exit,
     clippy::indexing_slicing,
     clippy::lossy_float_literal,

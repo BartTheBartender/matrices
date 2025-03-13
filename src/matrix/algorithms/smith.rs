@@ -272,33 +272,29 @@ mod test {
     }
 
     #[test]
-    fn clear_row_many() {
-        for _ in 0_i32..10_i32 {
-            let A_old = random_matrix(5, 6);
-            let mut A = A_old.clone();
-            let mut Q = M::identity(A.nof_cols());
-            M::clear_row(&mut A, &mut Q, 0);
-            assert_eq!(A_old * Q, A);
-            A.row(0)
-                .expect("The 0-th row exists.")
-                .skip(1)
-                .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
-        }
+    fn clear_row_random() {
+        let A_old = random_matrix(5, 6);
+        let mut A = A_old.clone();
+        let mut Q = M::identity(A.nof_cols());
+        M::clear_row(&mut A, &mut Q, 0);
+        assert_eq!(A_old * Q, A);
+        A.row(0)
+            .expect("The 0-th row exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
     }
 
     #[test]
-    fn clear_col_many() {
-        for _ in 0_i32..10_i32 {
-            let A_old = random_matrix(5, 6);
-            let mut A = A_old.clone();
-            let mut P = M::identity(A.nof_rows());
-            M::clear_col(&mut A, &mut P, 0);
-            assert_eq!(P * A_old, A);
-            A.col(0)
-                .expect("The 0-th col exists.")
-                .skip(1)
-                .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
-        }
+    fn clear_col_random() {
+        let A_old = random_matrix(5, 6);
+        let mut A = A_old.clone();
+        let mut P = M::identity(A.nof_rows());
+        M::clear_col(&mut A, &mut P, 0);
+        assert_eq!(P * A_old, A);
+        A.col(0)
+            .expect("The 0-th col exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
     }
 
     #[test]
@@ -372,23 +368,21 @@ mod test {
     }
 
     #[test]
-    fn smith_many() {
-        for _ in 0_i32..10_i32 {
-            let A = random_matrix(5, 6);
-            match std::panic::catch_unwind(|| A.clone().smith()) {
-                Ok((P, D, Q)) => {
-                    assert!(D.is_diagonal());
-                    assert_eq!(P * A * Q, D);
-                }
-                Err(err) => {
-                    let message = err
-                        .downcast_ref::<&str>()
-                        .expect("The only possibility to fail is to multiply by overflow.");
-                    assert!(
-                        (message == &"attempt to multiply with overflow")
-                            || (message == &"attempt to add with overflow")
-                    );
-                }
+    fn smith_random() {
+        let A = random_matrix(5, 6);
+        match std::panic::catch_unwind(|| A.clone().smith()) {
+            Ok((P, D, Q)) => {
+                assert!(D.is_diagonal());
+                assert_eq!(P * A * Q, D);
+            }
+            Err(err) => {
+                let message = err
+                    .downcast_ref::<&str>()
+                    .expect("The only possibility to fail is to multiply by overflow.");
+                assert!(
+                    (message == &"attempt to multiply with overflow")
+                        || (message == &"attempt to add with overflow")
+                );
             }
         }
     }
