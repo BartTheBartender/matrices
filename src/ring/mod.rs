@@ -18,6 +18,7 @@ pub mod integers;
 
 use std::{
     hash::Hash,
+    iter::Sum,
     num::NonZero,
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
@@ -35,6 +36,7 @@ pub trait Ring:
     + Neg<Output = Self>
     + Copy
     + Mul<Output = Self>
+    + Sum
 {
     const ZERO: Self;
     const ONE: Self;
@@ -45,10 +47,7 @@ pub trait Ring:
     fn dot_product(
         left_iterator: impl Iterator<Item = Self>,
         right_iterator: impl Iterator<Item = Self>,
-    ) -> Self
-    where
-        Self: std::iter::Sum,
-    {
+    ) -> Self {
         left_iterator
             .zip(right_iterator)
             .map(|(left, right)| left * right)

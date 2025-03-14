@@ -1,4 +1,4 @@
-use crate::{matrix::Matrix, ring::Euclidian};
+use crate::{matrix::Matrix, ring::Euclidean};
 use std::ops::Not;
 
 #[allow(
@@ -6,7 +6,7 @@ use std::ops::Not;
     clippy::arithmetic_side_effects,
     reason = "this is a matrix algorithm"
 )]
-impl<R: Euclidian> Matrix<R> {
+impl<R: Euclidean> Matrix<R> {
     /// Returns the element in the principal minor in the submatrix ``A[minor_idx..][minor_idx..]`` with the smallest ``R::norm()``.
     fn pivot(&self, minor_idx: usize) -> Option<(usize, usize)> {
         self.cols()
@@ -45,21 +45,22 @@ impl<R: Euclidian> Matrix<R> {
         debug_assert!(
             *A.get(minor_idx, minor_idx)
                 .expect("The indices are in proper bounds.")
-                != R::zero(),
+                != R::ZERO,
             "The pivot in clear_row cannot be zero."
         );
         for col_idx in minor_idx.saturating_add(1)..A.nof_cols() {
             while *A
                 .get(minor_idx, col_idx)
                 .expect("The indices are in proper bounds.")
-                != R::zero()
+                != R::ZERO
             {
-                let (q, r) = R::divide_with_reminder(
-                    *A.get(minor_idx, col_idx)
-                        .expect("The indices in A are in proper bounds."),
-                    *A.get(minor_idx, minor_idx)
-                        .expect("The indices in T are in proper bounds."),
-                );
+                let amc = *A.get(minor_idx, col_idx)
+                        .expect("The indices in A are in proper bounds.");
+                let amm = *A.get(minor_idx, minor_idx)
+                        .expect("The indices in T are in proper bounds.");
+                let q = amc / amm;
+
+
                 A.add_muled_col_to_col(-q, minor_idx, col_idx)
                     .expect("Addition of col to col in A will succeed.");
                 Q.add_muled_col_to_col(-q, minor_idx, col_idx)
@@ -67,7 +68,7 @@ impl<R: Euclidian> Matrix<R> {
                 if *A
                     .get(minor_idx, col_idx)
                     .expect("The indices in A are in proper bounds.")
-                    != R::zero()
+                    != R::ZERO
                 {
                     A.swap_cols(minor_idx, col_idx)
                         .expect("Swapping cols in A will succeed.");
@@ -76,7 +77,7 @@ impl<R: Euclidian> Matrix<R> {
                     debug_assert!(
                         *A.get(minor_idx, minor_idx)
                             .expect("The pivot should be in proper bounds.")
-                            == r,
+                            == amc % amm,
                         "After performing the reduction this should be the pivot."
                     );
                 }
@@ -88,21 +89,22 @@ impl<R: Euclidian> Matrix<R> {
         debug_assert!(
             *A.get(minor_idx, minor_idx)
                 .expect("The indices are in proper bounds.")
-                != R::zero(),
+                != R::ZERO,
             "The pivot in clear_col cannot be zero."
         );
         for row_idx in minor_idx.saturating_add(1)..A.nof_rows() {
             while *A
                 .get(row_idx, minor_idx)
                 .expect("The indices are in proper bounds.")
-                != R::zero()
+                != R::ZERO
             {
-                let (q, r) = R::divide_with_reminder(
-                    *A.get(row_idx, minor_idx)
-                        .expect("The indices in A are in proper bounds."),
-                    *A.get(minor_idx, minor_idx)
-                        .expect("The indices in T are in proper bounds."),
-                );
+                let arm = *A.get(row_idx, minor_idx)
+                        .expect("The indices in A are in proper bounds.");
+                let amm = *A.get(minor_idx, minor_idx)
+                        .expect("The indices in T are in proper bounds.");
+
+                let q = arm / amm;
+
                 A.add_muled_row_to_row(-q, minor_idx, row_idx)
                     .expect("Addition of row to row in A will succeed.");
                 Q.add_muled_row_to_row(-q, minor_idx, row_idx)
@@ -110,7 +112,7 @@ impl<R: Euclidian> Matrix<R> {
                 if *A
                     .get(row_idx, minor_idx)
                     .expect("The indices in A are in proper bounds.")
-                    != R::zero()
+                    != R::ZERO
                 {
                     A.swap_rows(minor_idx, row_idx)
                         .expect("Swapping cols in A will succeed.");
@@ -119,7 +121,7 @@ impl<R: Euclidian> Matrix<R> {
                     debug_assert!(
                         *A.get(minor_idx, minor_idx)
                             .expect("The pivot should be in proper bounds.")
-                            == r,
+                            == arm % amm,
                         "After performing the reduction this should be the pivot."
                     );
                 }
@@ -215,7 +217,7 @@ impl<R: Euclidian> Matrix<R> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ring::{AbelianGroup, Integer};
+    use crate::ring::{Integer, Ring};
     type M = Matrix<Integer>;
 
     fn matrix() -> M {
@@ -232,7 +234,7 @@ mod test {
         use rand::Rng;
         M::from_cols(
             (0..nof_cols)
-                .map(move |_| (0..nof_rows).map(move |_| rand::rng().random_range(1_i64..100_i64))),
+                .map(move |_| (0..nof_rows).map(move |_| rand::rng().random_range(1_i32..100_i32))),
         )
         .expect("This is well-defined since all inner iterators have the same length.")
     }
@@ -255,7 +257,7 @@ mod test {
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]
@@ -268,7 +270,7 @@ mod test {
         A.col(0)
             .expect("The 0-th row exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]
@@ -281,7 +283,7 @@ mod test {
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]
@@ -294,7 +296,7 @@ mod test {
         A.col(0)
             .expect("The 0-th col exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]
@@ -321,17 +323,17 @@ mod test {
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
 
         A.col(0)
             .expect("The 0-th col exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
 
         A.row(1)
             .expect("The 1-th row exists.")
             .skip(2)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]
@@ -347,17 +349,17 @@ mod test {
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
 
         A.col(0)
             .expect("The 0-th col exists.")
             .skip(1)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
 
         A.col(1)
             .expect("The 1-th row exists.")
             .skip(2)
-            .for_each(|row_entry| assert_eq!(*row_entry, <Integer as AbelianGroup>::zero()));
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
     #[test]

@@ -23,7 +23,7 @@ impl<R: Ring> Matrix<R> {
         (1..self.nof_cols()).all(|j| {
             unsafe { self.col_unchecked(j) }
                 .take(j.saturating_sub(1)) // all such aij with i < j
-                .all(|aij| *aij == R::zero())
+                .all(|aij| *aij == R::ZERO)
         })
     }
 
@@ -33,7 +33,7 @@ impl<R: Ring> Matrix<R> {
         (0..self.nof_cols()).all(|j| {
             unsafe { self.col_unchecked(j) }
                 .skip(j.saturating_add(1)) // all such aij with i > j
-                .all(|aij| *aij == R::zero())
+                .all(|aij| *aij == R::ZERO)
         })
     }
 
@@ -50,7 +50,7 @@ impl<R: Ring> Matrix<R> {
         Self {
             nof_cols,
             nof_rows,
-            buffer: vec![R::zero(); nof_cols.saturating_mul(nof_rows)],
+            buffer: vec![R::ZERO; nof_cols.saturating_mul(nof_rows)],
         }
     }
 
@@ -59,7 +59,7 @@ impl<R: Ring> Matrix<R> {
     pub fn identity(nof_rows: usize) -> Self {
         let mut id = Self::zero(nof_rows, nof_rows);
         (0..nof_rows).for_each(|i| unsafe {
-            *id.get_unchecked_mut(i, i) = R::one();
+            *id.get_unchecked_mut(i, i) = R::ONE;
         });
         id
     }
@@ -317,7 +317,7 @@ impl<R: Ring> Add<Self> for Matrix<R> {
 /// Substraction
 impl<R: Ring> Sub<&Self> for Matrix<R> {
     type Output = Self;
-    fn sub(self, other: &Self)  -> Self::Output {
+    fn sub(self, other: &Self) -> Self::Output {
         #![allow(
             clippy::arithmetic_side_effects,
             reason = "Ring operations are defined using math symbols."

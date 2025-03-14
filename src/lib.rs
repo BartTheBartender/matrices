@@ -101,7 +101,7 @@ however, a bug inside it prevents using type aliases for other types
 )]
 /* clippy end */
 
-//pub mod matrix;
+pub mod matrix;
 
 #[allow(
     clippy::arithmetic_side_effects,
