@@ -1,135 +1,172 @@
-use super::{integers::Integer, *};
-use std::{
-    fmt,
-    iter::Sum,
-    ops::{Add, Mul, Neg, Sub},
-};
-
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
-pub struct Cyclic<const N: u64> {
-    value: u64,
-}
-
-impl<const N: u64> Add<Self> for Cyclic<N> {
-    type Output = Self;
-    fn add(self, other: Self) -> Self::Output {
-        Self {
-            value: (self.value + other.value) % N,
-        }
-    }
-}
-
-impl<const N: u64> Neg for Cyclic<N> {
-    type Output = Self;
-    fn neg(self) -> Self::Output {
-        Self {
-            value: N - self.value,
-        }
-    }
-}
-
-impl<const N: u64> Sub<Self> for Cyclic<N> {
-    type Output = Self;
-    fn sub(self, other: Self) -> Self::Output {
-        self + (-other)
-    }
-}
-
-impl<const N: u64> Sum for Cyclic<N> {
-    fn sum<I: Iterator<Item = Self>>(iterator: I) -> Self {
-        iterator.fold(Self::zero(), |acc, x| acc + x)
-    }
-}
-
-impl<const N: u64> AbelianGroup for Cyclic<N> {
-    fn zero() -> Self {
-        Self { value: 0 }
-    }
-}
-
-impl<const N: u64> Mul<Self> for Cyclic<N> {
-    type Output = Self;
-    fn mul(self, other: Self) -> Self::Output {
-        Self {
-            value: (self.value * other.value) % N,
-        }
-    }
-}
-
-impl<const N: u64> From<Integer> for Cyclic<N> {
-    fn from(int: Integer) -> Self {
-        let shifted: u64 = if int < 0 {
-            let n_as_integer = Integer::try_from(N).expect("This overflow should not occur");
-            u64::try_from(((int % n_as_integer) + n_as_integer) % n_as_integer)
-                .expect("This overflow cannot occur.")
-        } else {
-            int.try_into().expect("The overflow cannot occur")
+/// I cannot use const generic parameter of type given by a type alias.
+macro_rules! impl_cyclic {
+    ($natural_type: tt) => {
+        use super::{CommutativeRing, Gcd, Integer, Noetherian, Ring};
+        use std::{
+            cmp::Ordering,
+            fmt,
+            iter::Sum,
+            ops::{Add, Mul, Neg, Sub},
         };
+        #[derive(Clone, Copy, Eq, PartialEq, Debug)]
+        pub struct Cyclic<const N: $natural_type> {
+            value: $natural_type,
+        }
 
-        Self { value: shifted % N }
-    }
+        impl<const N: $natural_type> Add<Self> for Cyclic<N> {
+            type Output = Self;
+            fn add(self, other: Self) -> Self::Output {
+                Self {
+                    value: (self.value + other.value) % N,
+                }
+            }
+        }
+        impl<const N: $natural_type> Neg for Cyclic<N> {
+            type Output = Self;
+            fn neg(self) -> Self::Output {
+                Self {
+                    value: match self.value {
+                        0 => 0,
+                        positive => N - positive,
+                    },
+                }
+            }
+        }
+        impl<const N: $natural_type> Sub<Self> for Cyclic<N> {
+            type Output = Self;
+            fn sub(self, other: Self) -> Self::Output {
+                self + (-other)
+            }
+        }
+        impl<const N: $natural_type> Mul<Self> for Cyclic<N> {
+            type Output = Self;
+            fn mul(self, other: Self) -> Self::Output {
+                Self {
+                    value: (self.value * other.value) % N,
+                }
+            }
+        }
+        impl<const N: $natural_type> From<Integer> for Cyclic<N> {
+            #[allow(
+                clippy::as_conversions,
+                reason = "the result of div_euclid will be in 0..N"
+            )]
+            fn from(int: Integer) -> Self {
+                let value = match int.cmp(&0) {
+                    Ordering::Equal => 0,
+                    _ => Integer::rem_euclid(int, Integer::from(N)).unsigned_abs() as $natural_type,
+                };
+
+                Self { value }
+            }
+        }
+        impl<const N: $natural_type> From<Cyclic<N>> for Integer {
+            fn from(cyclic: Cyclic<N>) -> Self {
+                Self::from(cyclic.value)
+            }
+        }
+        impl<const N: $natural_type> Sum for Cyclic<N> {
+            fn sum<I>(iter: I) -> Self
+            where
+                I: Iterator<Item = Self>,
+            {
+                Self {
+                    value: iter.map(|number| number.value).sum::<$natural_type>(),
+                }
+            }
+        }
+
+        impl<const N: $natural_type> Ring for Cyclic<N> {
+            const ZERO: Self = Self { value: 0 };
+            const ONE: Self = Self { value: 1 };
+
+            /// The canonized element up to association is `b = gcd(a, N)`.
+            fn canonize(a: Self) -> (Self, Self) {
+                let (b, x, _) = Integer::extended_gcd(Integer::from(a), Integer::from(N));
+                (Self::from(b), Self::from(x))
+            }
+
+            fn try_left_divide(self, b: Self) -> Option<Self> {
+                let self_integer = Integer::from(self);
+                let b_integer = Integer::from(b);
+
+                // First, find common factor of `a` and `b`.
+                let common = Integer::gcd(self_integer, b_integer);
+
+                // It is necessary and sufficient for `b / common` to be coprime with `N`,
+                // since it is then invertible.
+                let (g, b_common_inv, _) =
+                    Integer::extended_gcd(b_integer / common, Integer::from(N));
+
+                (Self::from(g) == Self::ONE)
+                    .then(|| Self::from(self_integer / common * b_common_inv))
+            }
+
+            fn try_right_divide(self, b: Self) -> Option<Self> {
+                self.try_left_divide(b)
+            }
+        }
+
+        impl<const N: $natural_type> CommutativeRing for Cyclic<N> {}
+        impl<const N: $natural_type> Noetherian for Cyclic<N> {}
+
+        impl<const N: $natural_type> fmt::Display for Cyclic<N> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}", self.value)
+            }
+        }
+
+        #[cfg(test)]
+        mod test {
+            use super::*;
+
+            #[test]
+            fn from_integer() {
+                type R = Cyclic<5>;
+                assert_eq!(R::from(1).value, 1);
+                assert_eq!(R::from(5).value, 0);
+                assert_eq!(R::from(-17).value, 3);
+            }
+
+            #[test]
+            fn add() {
+                type R = Cyclic<5>;
+
+                assert_eq!(R::from(2) + R::from(2), R::from(4));
+                assert_eq!(R::from(3) + R::from(3), R::from(1));
+                assert_eq!(R::from(3) + R::from(2), R::from(0));
+            }
+
+            #[test]
+            fn neg() {
+                type R = Cyclic<5>;
+
+                assert_eq!(-R::from(0), R::from(0));
+                assert_eq!(-R::from(1), R::from(4));
+                assert_eq!(-R::from(2), R::from(3));
+                assert_eq!(-R::from(3), R::from(2));
+                assert_eq!(-R::from(4), R::from(1));
+            }
+
+            #[test]
+            fn mul() {
+                type R = Cyclic<5>;
+
+                assert_eq!(R::from(2) * R::from(2), R::from(4));
+                assert_eq!(R::from(3) * R::from(3), R::from(4));
+                assert_eq!(R::from(3) * R::from(2), R::from(1));
+            }
+
+            #[test]
+            fn divides() {
+                type R = Cyclic<5>;
+                for (i, j) in itertools::iproduct!(1..5, 0..5) {
+                    assert!(R::from(i).divides(R::from(j)))
+                }
+            }
+        }
+    };
 }
 
-impl<const N: u64> Ring for Cyclic<N> {
-    fn one() -> Self {
-        Self { value: 1 }
-    }
-
-    fn try_divide(a: Self, b: Self) -> Option<Self> {
-        let a_v = a.value.try_into().expect("The overflow should not occur.");
-        let b_v = b.value.try_into().expect("The overflow should not occur.");
-        let (d, _, _) = Integer::gcd(a_v, b_v);
-
-        let (gcd, x, _) = Integer::gcd(
-            b_v / d,
-            N.try_into().expect("The overflow should not occur."),
-        );
-        // a/b = a_v / b_v = (a_v / d) / (b_v / d)
-        // it suffices for b_v / d to be invertible mod N
-        (gcd == 1).then(|| Self::from(a_v / d) * Self::from(x))
-    }
-
-    fn canonize(a: Self) -> (Self, Self) {
-        todo!()
-    }
-}
-
-impl<const N: u64> Bezout for Cyclic<N> {
-    fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
-        let (gcd, x, y) = Integer::gcd(
-            a.value.try_into().expect("This should be convertable."),
-            b.value.try_into().expect("This should be convertable."),
-        );
-        (Self::from(gcd), Self::from(x), Self::from(y))
-    }
-
-}
-
-//impl<const N: u64> Finite for Cyclic<N> {
-//    type Output = Self;
-//
-//    fn elements() -> impl ExactSizeIterator<Item = Self::Output> {
-//        (0..N).map(|value| Self { value })
-//    }
-//}
-impl<const N: u64> fmt::Display for Cyclic<N> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.value)
-    }
-}
-
-//#[cfg(test)]
-//mod test {
-//
-//    use super::*;
-//
-//    #[test]
-//    fn elements() {
-//        assert_eq!(
-//            Cyclic::<2>::elements()
-//                .map(|num| num.value)
-//                .collect::<Vec<_>>(),
-//            vec![0, 1]
-//        );
-//    }
-//}
+pub type Natural = u16;
+impl_cyclic!(u16);

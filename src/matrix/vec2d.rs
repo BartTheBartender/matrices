@@ -1,19 +1,16 @@
 use crate::ring::Finite;
+use bitvec::prelude::*;
 use custom_error::custom_error;
-use itertools::{iproduct, Itertools};
-use std::{fmt, mem};
+use itertools::Itertools;
+use std::fmt;
 
 custom_error! {
     #[derive(PartialEq, Eq, Clone)]
     pub Vec2dError
-    DifferentLengthsColsIterator = "Cols in the iterator had different lengths.",
-    DifferentLengthsRowsIterator = "Rows in the iterator had different lengths.",
-    EmptyColsIterator = "Iterator of cols was empty.",
-    EmptyRowsIterator = "Iterator of rows was empty.",
-    DifferentColLengths{left_col_len: usize, right_col_len: usize} = "Different col_lens (left.col_len() = {left_col_len}, right.col_len() = {right_col_len}).",
-    DifferentRowLengths{top_row_len: usize, bot_row_len: usize} = "Different row_lens (top.row_len() = {top_row_len}, bot.row_len() = {bot_row_len}).",
-    ColIdxOutOfBounds{col_idx: usize, col_len: usize} = "Col_idx ({col_idx}) out of bound col_len ({col_len}).",
-    RowIdxOutOfBounds{row_idx: usize, row_len: usize} = "Row_idx ({row_idx}) out of bound row_len ({row_len}).",
+    IteratorLengthsMismatch = "Axes in the iterator had different lengths.",
+    EmptyIterator = "Iterator was empty.",
+    DifferentLengths{left_len: usize, right_len: usize} = "Left axis has len {left_len}, but right axis has len {right_len}.",
+    IdxOutOfBounds{idx: usize, bound: usize} = "The index {idx} should be less than {bound}.",
     Unexpected = "This bug is unexpected"
 }
 
@@ -26,133 +23,190 @@ pub struct Vec2d<T> {
 }
 
 impl<T> Vec2d<T> {
+    /// Returns the number of rows of the `Vec2d`.
+    #[must_use]
     pub const fn nof_rows(&self) -> usize {
         self.nof_rows
     }
 
+    /// Returns the number of collums of the `Vec2d`.
+    #[must_use]
     pub const fn nof_cols(&self) -> usize {
         self.nof_cols
     }
 
+    /// Returns the length of a collumn of the `Vec2d`.
+    /// Note that it is by definition its number of rows.
+    #[must_use]
     pub const fn col_len(&self) -> usize {
         self.nof_rows()
     }
 
+    /// Returns the length of a row of the `Vec2d`.
+    /// Note that it is by definition its number of collums.
+    #[must_use]
     pub const fn row_len(&self) -> usize {
         self.nof_cols()
     }
 
+    /// The `shape` of the `Vec2d` is a pair `(nof_rows, nof_cols)`.
+    #[must_use]
     pub const fn shape(&self) -> (usize, usize) {
         (self.nof_rows(), self.nof_cols())
     }
 
+    /// Determines if then `Vec2d` is square.
+    #[must_use]
     pub const fn is_square(&self) -> bool {
         self.nof_cols() == self.nof_rows()
     }
 
+    /// Returns an immutable reference to the element in the
+    /// `i`-th row and `j`-th collumn of a `Vec2d`.
+    /// # Safety
+    /// The caller must guarantee that `i < nof_rows` and `j < nof_cols`.
+    #[must_use]
     pub unsafe fn get_unchecked(&self, i: usize, j: usize) -> &T {
-        self.buffer.get_unchecked(i + self.col_len() * j)
+        self.buffer
+            .get_unchecked(i.strict_add(self.col_len().strict_mul(j)))
     }
 
+    /// Returns an immutable reference to the element in the
+    /// `i`-th row and `j`-th collumn of a `Vec2d`.
+    /// # Errors
+    /// If one of the indices is out of bounds, returns error.
     pub fn get(&self, i: usize, j: usize) -> Result<&T, Vec2dError> {
         if i >= self.nof_rows() {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: self.nof_rows(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: self.nof_rows(),
             })
         } else if j >= self.nof_cols() {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: self.nof_cols(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: self.nof_cols(),
             })
         } else {
             Ok(unsafe { self.get_unchecked(i, j) })
         }
     }
 
-    pub unsafe fn get_unchecked_mut<'a>(&'a mut self, i: usize, j: usize) -> &'a mut T {
+    /// Returns a mutable reference to the element in the
+    /// `i`-th row and `j`-th collumn of a `Vec2d`.
+    /// # Safety
+    /// The caller must guarantee that `i < nof_rows` and `j < nof_cols`.
+    pub unsafe fn get_unchecked_mut(&mut self, i: usize, j: usize) -> &mut T {
         let col_len = self.col_len();
-        self.buffer.get_unchecked_mut(i + col_len * j)
+        self.buffer
+            .get_unchecked_mut(i.strict_add(col_len.strict_mul(j)))
     }
 
-    pub fn get_mut<'a>(&'a mut self, i: usize, j: usize) -> Result<&'a mut T, Vec2dError> {
+    /// Returns a mutable reference to the element in the
+    /// `i`-th row and `j`-th collumn of a `Vec2d`.
+    /// # Errors
+    /// If one of the indices is out of bounds, returns error.
+    pub fn get_mut(&mut self, i: usize, j: usize) -> Result<&mut T, Vec2dError> {
         if i >= self.nof_rows() {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: self.nof_rows(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: self.nof_rows(),
             })
         } else if j >= self.nof_cols() {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: self.nof_cols(),
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: self.nof_cols(),
             })
         } else {
             Ok(unsafe { self.get_unchecked_mut(i, j) })
         }
     }
 
-    /// Transposes the 2d vector. Unfortunately not in place.
-    // Possibly optimize
+    /// Transposes the `Vec2d.`.
+    /// For the correctness of the algorithm see
+    /// `<https://www.geeksforgeeks.org/inplace-m-x-n-size-matrix-transpose/>`.
     pub fn transpose(&mut self) {
-        let nof_cols = self.nof_rows();
-        let nof_rows = self.nof_cols();
+        #![allow(clippy::arithmetic_side_effects, reason = "This uses mod arithmetic.")]
+        let row_len = self.row_len();
+        let len_minus_1 = self.buffer.len() - 1;
 
-        self.nof_cols = nof_cols;
-        self.nof_rows = nof_rows;
+        let mut cycle_hashing = bitvec![0; self.buffer.len()];
+        cycle_hashing.set(0, true);
+        cycle_hashing.set(len_minus_1, true);
 
-        let mut helper_buffer = {
-            let mut buffer: Vec<T> = Vec::with_capacity(self.buffer.len());
-            unsafe { buffer.set_len(self.buffer.len()) }
-            buffer
-        };
-        mem::swap(&mut helper_buffer, &mut self.buffer);
+        for start_idx in 0..self.buffer.len() {
+            if !cycle_hashing[start_idx] {
+                let mut curr = start_idx;
 
-        helper_buffer
-            .into_iter()
-            .zip(iproduct!(0..nof_rows, 0..nof_cols))
-            .map(|(value, (i, j))| (value, i + j * nof_rows))
-            .for_each(|(value, idx)| self.buffer[idx] = value);
+                'cycling: loop {
+                    let next = (curr * row_len) % len_minus_1;
+                    self.buffer.swap(start_idx, next);
+                    cycle_hashing.set(curr, true);
+                    curr = next;
+
+                    if cycle_hashing[curr] {
+                        break 'cycling;
+                    }
+                }
+            }
+        }
+
+        self.nof_cols = self.nof_rows();
+        self.nof_rows = row_len;
     }
 
-    /// The caller must guaranttee that col_idx < self.nof_cols()
+    /// Iterator of immutable references to a collumn of a given index.
+    /// # Safety
+    /// The caller must guarantee that `col_idx < self.nof_cols()`.
     pub unsafe fn col_unchecked(&self, col_idx: usize) -> impl Iterator<Item = &T> {
-        let begin = col_idx * self.col_len();
-        let end = begin + self.col_len();
+        let begin = col_idx.strict_mul(self.col_len());
+        let end = begin.strict_add(self.col_len());
         self.buffer[begin..end].iter()
     }
 
-    /// The caller must guaranttee that col_idx < self.nof_cols()
+    /// Iterator of mutable references to a collumn of a given index.
+    /// # Safety
+    /// The caller must guarantee that `col_idx < self.nof_cols()`.
     pub unsafe fn col_mut_unchecked(&mut self, col_idx: usize) -> impl Iterator<Item = &mut T> {
-        let begin = col_idx * self.col_len();
-        let end = begin + self.col_len();
+        let begin = col_idx.strict_mul(self.col_len());
+        let end = begin.strict_add(self.col_len());
         self.buffer[begin..end].iter_mut()
     }
 
+    /// Iterator of immutable references to a collumn of a given index.
+    /// # Errors
+    /// If `col_idx < self.nof_cols()`, function returns error.
     pub fn col(&self, col_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
         (col_idx < self.nof_cols())
             .then(|| unsafe { self.col_unchecked(col_idx) })
-            .ok_or(Vec2dError::RowIdxOutOfBounds {
-                row_idx: col_idx,
-                row_len: self.nof_cols(),
+            .ok_or_else(|| Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: self.nof_cols(),
             })
     }
 
+    /// Iterator of mutable references to a collumn of a given index.
+    /// # Errors
+    /// If `col_idx < self.nof_cols()`, function returns error.
     pub fn col_mut(&mut self, col_idx: usize) -> Result<impl Iterator<Item = &mut T>, Vec2dError> {
         let nof_cols = self.nof_cols();
         (col_idx < nof_cols)
             .then(|| unsafe { self.col_mut_unchecked(col_idx) })
-            .ok_or(Vec2dError::RowIdxOutOfBounds {
-                row_idx: col_idx,
-                row_len: nof_cols,
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: nof_cols,
             })
     }
 
-    /// Collumn iterator, borrowing the 2d vec
+    /// Iterator of iterators to collumns of the `Vec2d`, borrowing the `Vec2d`.
+    /// # Panics
+    /// This function never panics.
     pub fn cols(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
         (0..self.nof_cols()).map(|col_idx| unsafe { self.col_unchecked(col_idx) })
     }
 
-    //Collumn  iterator, taking ownership of the 2d vec
+    /// Iterator of iterators to collumns of the `Vec2d`, taking ownership of the `Vec2d`.
+    /// # Panics
+    /// This function never panics.
     pub fn into_cols(self) -> impl Iterator<Item = impl Iterator<Item = T>> {
         let nof_cols = self.nof_cols();
         let col_len = self.col_len();
@@ -166,63 +220,86 @@ impl<T> Vec2d<T> {
         })
     }
 
-    pub fn from_cols(
-        cols_iterator: impl Iterator<Item = impl Iterator<Item = T>>,
+    /// Constructs a `Vec2d` from an iterator of iterators over `T`
+    /// representing its collumns.
+    /// # Errors
+    /// If either `cols_iterator` is empty or some its elements have diffrerent
+    /// lengths, the function returns error.
+    pub fn from_cols<ColIt: Iterator<Item = T>, It: Iterator<Item = ColIt>>(
+        mut cols_iterator: It,
     ) -> Result<Self, Vec2dError> {
-        let mut nof_rows = None;
-        let mut buffer = Vec::new();
-
+        let mut buffer = cols_iterator
+            .next()
+            .map(Iterator::collect::<Vec<_>>)
+            .ok_or(Vec2dError::EmptyIterator)?;
+        let nof_rows = buffer.len();
         let mut old_len = buffer.len();
-        let mut new_len = buffer.len();
+        let mut nof_cols: usize = 1;
 
         for col_iterator in cols_iterator {
             buffer.extend(col_iterator);
-            new_len = buffer.len();
-            match nof_rows {
-                Some(nof_rows) => {
-                    if nof_rows != new_len - old_len {
-                        return Err(Vec2dError::DifferentLengthsColsIterator);
-                    }
-                }
-                None => nof_rows = Some(new_len),
+            let new_len = buffer.len();
+
+            if new_len == old_len.strict_add(nof_rows) {
+                old_len = new_len;
+                nof_cols = nof_cols.strict_add(1);
+            } else {
+                return Err(Vec2dError::IteratorLengthsMismatch);
             }
-            old_len = new_len;
         }
 
-        nof_rows
-            .ok_or(Vec2dError::EmptyColsIterator)
-            .map(|nof_rows| Self {
-                buffer,
-                nof_rows,
-                nof_cols: new_len / nof_rows,
-            })
+        Ok(Self {
+            buffer,
+            nof_rows,
+            nof_cols,
+        })
     }
 
+    /// Constructs a `Vec2d` from a `Vec<Vec<T>>` representing its collumns. Useful wrapper for `from_cols`.
+    /// # Errors
+    /// If either `cols_vector` is empty or some its elements have diffrerent
+    /// lengths, the function returns error.
     pub fn from_cols_vec(cols_vec: Vec<Vec<T>>) -> Result<Self, Vec2dError> {
-        Self::from_cols(cols_vec.into_iter().map(|col| col.into_iter()))
+        Self::from_cols(cols_vec.into_iter().map(IntoIterator::into_iter))
     }
 
+    /// From a `Vec2d<T>` constructs a `Vec<Vec<T>>` representing its collumns. Useful wrapper for `into_cols`.
+    #[must_use]
     pub fn into_cols_vec(self) -> Vec<Vec<T>> {
         self.into_cols()
-            .map(|col_iterator| col_iterator.collect::<Vec<_>>())
+            .map(Iterator::collect::<Vec<_>>)
             .collect::<Vec<_>>()
     }
 
+    /// Constructs a `Vec2d` from an array `[[T; NOF_COLS]; NOF_ROWS]` representing its
+    /// collumns.
+    /// Useful for defining custom `Vec2d`'s.
+    /// # Panics
+    /// This function can panic only of `NOF_ROWS * NOF_COLS` exceeds `usize::MAX`.
     pub fn from_cols_arr<const NOF_ROWS: usize, const NOF_COLS: usize>(
         cols_arr: [[T; NOF_ROWS]; NOF_COLS],
     ) -> Self {
-        Self::from_cols(cols_arr.into_iter().map(|col| col.into_iter()))
+        assert!(
+            NOF_ROWS.strict_mul(NOF_COLS) < usize::MAX,
+            "Max size of a Vec<T> is usize::MAX = {}.",
+            usize::MAX
+        );
+        Self::from_cols(cols_arr.into_iter().map(IntoIterator::into_iter))
             .expect("The arrays have correct bounds.")
     }
 
-    /// The caller must guaranttee that row_idx < self.nof_rows()
+    /// Iterator of immutable references to a row of a given index.
+    /// # Safety
+    /// The caller must guarantee that `row_idx < self.nof_rows()`.
     pub unsafe fn row_unchecked(&self, row_idx: usize) -> impl Iterator<Item = &T> {
         (0..self.row_len())
-            .map(move |idx| self.col_len() * idx + row_idx)
+            .map(move |idx| self.col_len().strict_mul(idx).strict_add(row_idx))
             .map(|idx| self.buffer.get_unchecked(idx))
     }
 
-    /// The caller must guaranttee that row_idx < self.nof_rows()
+    /// Iterator of mutable references to a row of a given index.
+    /// # Safety
+    /// The caller must guarantee that `row_idx < self.nof_rows()`.
     pub unsafe fn row_mut_unchecked(&mut self, row_idx: usize) -> impl Iterator<Item = &mut T> {
         let row_len = self.row_len();
         let col_len = self.col_len();
@@ -230,134 +307,164 @@ impl<T> Vec2d<T> {
         let buffer_ptr = self.buffer.as_mut_ptr();
 
         (0..row_len)
-            .map(move |idx| col_len * idx + row_idx)
+            .map(move |idx| col_len.strict_mul(idx).strict_add(row_idx))
             .map(move |idx| &mut *buffer_ptr.add(idx))
     }
 
+    /// Iterator of immutable references to a row of a given index.
+    /// # Errors
+    /// If `row_idx < self.nof_rows()`, function returns error.
     pub fn row(&self, row_idx: usize) -> Result<impl Iterator<Item = &T>, Vec2dError> {
         (row_idx < self.nof_rows())
             .then(|| unsafe { self.row_unchecked(row_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds {
-                col_idx: row_idx,
-                col_len: self.nof_rows(),
+            .ok_or_else(|| Vec2dError::IdxOutOfBounds {
+                idx: row_idx,
+                bound: self.nof_rows(),
             })
     }
 
+    /// Iterator of mutable references to a row of a given index.
+    /// # Errors
+    /// If `row_idx < self.nof_rows()`, function returns error.
     pub fn row_mut(&mut self, row_idx: usize) -> Result<impl Iterator<Item = &mut T>, Vec2dError> {
         let nof_rows = self.nof_rows();
         (row_idx < nof_rows)
             .then(|| unsafe { self.row_mut_unchecked(row_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds {
-                col_idx: row_idx,
-                col_len: nof_rows,
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: row_idx,
+                bound: nof_rows,
             })
     }
 
+    /// Iterator of iterators to rows of the `Vec2d`, borrowing the `Vec2d`.
+    /// # Panics
+    /// This function never panics.
     pub fn rows(&self) -> impl Iterator<Item = impl Iterator<Item = &T>> {
         (0..self.nof_rows()).map(move |row_idx| unsafe { self.row_unchecked(row_idx) })
     }
 
+    /// Iterator of iterators to rows of the `Vec2d`, taking ownership of the `Vec2d`.
+    /// This is intended only for convenience, it is not optimized.
+    /// # Panics
+    /// This function never panics.
     pub fn into_rows(mut self) -> impl Iterator<Item = impl Iterator<Item = T>> {
         self.transpose();
         self.into_cols()
     }
 
-    pub fn from_rows(
-        rows_iterator: impl Iterator<Item = impl Iterator<Item = T>>,
+    /// Constructs a `Vec2d` from an iterator of iterators over `T`
+    /// representing its rows.
+    /// This is intended only for convenience, it is not optimized.
+    /// # Errors
+    /// If either `rows_iterator` is empty or some its elements have diffrerent
+    /// lengths, the function returns error.
+    pub fn from_rows<RowIt: Iterator<Item = T>, It: Iterator<Item = RowIt>>(
+        rows_iterator: It,
     ) -> Result<Self, Vec2dError> {
-        Self::from_cols(rows_iterator)
-            .map(|mut self_transposed| {
-                self_transposed.transpose();
-                self_transposed
-            })
-            .map_err(|error| match error {
-                Vec2dError::DifferentLengthsColsIterator => {
-                    Vec2dError::DifferentLengthsRowsIterator
-                }
-                Vec2dError::EmptyColsIterator => Vec2dError::EmptyRowsIterator,
-                _ => Vec2dError::Unexpected,
-            })
+        Self::from_cols(rows_iterator).map(|mut vec2d| {
+            vec2d.transpose();
+            vec2d
+        })
     }
 
+    /// Constructs a `Vec2d` from a `Vec<Vec<T>>` representing its rows.
+    /// Useful wrapper for `from_rows`.
+    /// This is intended only for convenience, it is not optimized.
+    /// # Errors
+    /// If either `cols_vector` is empty or some its elements have diffrerent
+    /// lengths, the function returns error.
     pub fn from_rows_vec(rows_vec: Vec<Vec<T>>) -> Result<Self, Vec2dError> {
-        Self::from_rows(rows_vec.into_iter().map(|row| row.into_iter()))
+        Self::from_rows(rows_vec.into_iter().map(IntoIterator::into_iter))
     }
 
+    /// From a `Vec2d<T>` constructs a `Vec<Vec<T>>` representing its rows. Useful wrapper for `into_rows`.
     pub fn into_rows_vec(self) -> Vec<Vec<T>> {
         self.into_rows()
-            .map(|row_iterator| row_iterator.collect::<Vec<_>>())
+            .map(Iterator::collect::<Vec<_>>)
             .collect::<Vec<_>>()
     }
 
+    /// Constructs a `Vec2d` from an array `[[T; NOF_COLS]; NOF_ROWS]` representing its rows.
+    /// Useful for defining custom `Vec2d`'s.
+    /// # Panics
+    /// This function can panic only of `NOF_ROWS * NOF_COLS` exceeds `usize::MAX`.
     pub fn from_rows_arr<const NOF_ROWS: usize, const NOF_COLS: usize>(
         rows_arr: [[T; NOF_COLS]; NOF_ROWS],
     ) -> Self {
-        Self::from_rows(rows_arr.into_iter().map(|row| row.into_iter()))
+        assert!(
+            NOF_ROWS.strict_mul(NOF_COLS) < usize::MAX,
+            "Max size of a Vec<T> is usize::MAX = {}.",
+            usize::MAX
+        );
+        Self::from_rows(rows_arr.into_iter().map(std::iter::IntoIterator::into_iter))
             .expect("The arrays have correct bounds.")
     }
 
-    /// Given 2d vectors left and right, create the 2d vector
-    /// ------------
-    /// |left|right|
-    /// ------------
-    /// The caller must ensure that left and right have the same col_len
+    /// Create a `Vec2d` from `Vec2d`'s `left` and `right`.
+    /// --------------------
+    /// | `left` | `right` |
+    /// --------------------
+    /// # Safety
+    /// The caller must ensure that `left` and `right` have the same `col_len`.
+    #[must_use]
     pub unsafe fn merge_horizontally_unchecked(left: Self, mut right: Self) -> Self {
         let left_nof_cols = left.nof_cols();
         let mut buffer = left.buffer;
         buffer.append(&mut right.buffer);
         Self {
             buffer,
-            nof_cols: left_nof_cols + right.nof_cols(),
+            nof_cols: left_nof_cols.strict_add(right.nof_cols()),
             nof_rows: right.nof_rows(),
         }
     }
 
-    /// Given 2d vectors left and right, if they have the same col_len's, create the 2d vector
-    /// ------------
-    /// |left|right|
-    /// ------------
+    /// Create a `Vec2d` from `Vec2d`'s `left` and `right`.
+    /// --------------------
+    /// | `left` | `right` |
+    /// --------------------
+    /// # Errors
+    /// If `left` and `right` have different `col_len`, the function returns error.
     pub fn merge_horizontally(left: Self, right: Self) -> Result<Self, Vec2dError> {
         let left_col_len = left.col_len();
         let right_col_len = right.col_len();
         (left_col_len == right_col_len)
             .then(|| unsafe { Self::merge_horizontally_unchecked(left, right) })
-            .ok_or(Vec2dError::DifferentColLengths {
-                left_col_len,
-                right_col_len,
+            .ok_or(Vec2dError::DifferentLengths {
+                left_len: left_col_len,
+                right_len: right_col_len,
             })
     }
 
-    /// Given 2d vectors top and bot, if they have the same row_len's, create the 2d vector
-    /// -----
-    /// |top|
-    /// -----
-    /// |bot|
-    /// -----
+    /// Create a `Vec2d` from `Vec2d`'s `top` and `bot`.
+    /// ------------
+    /// | `top`    |
+    /// ------------
+    /// | `bottom` |
+    /// ------------
+    /// # Errors
+    /// If `top` and `bot` have different `row_len`, the function returns error.
     pub fn merge_vertically(mut top: Self, mut bot: Self) -> Result<Self, Vec2dError> {
-        let top_row_len = top.row_len();
-        let bot_row_len = bot.row_len();
-        (top_row_len == bot_row_len)
-            .then(|| {
-                top.transpose();
-                bot.transpose();
-                let mut transposed = unsafe { Self::merge_horizontally_unchecked(top, bot) };
-
-                transposed.transpose();
-                transposed
-            })
-            .ok_or(Vec2dError::DifferentRowLengths {
-                top_row_len,
-                bot_row_len,
-            })
+        top.transpose();
+        bot.transpose();
+        let mut merged = Self::merge_horizontally(top, bot)?;
+        merged.transpose();
+        Ok(merged)
     }
 
-    /// Creates a 2d vector
-    /// --------------------
-    /// |left_top|right_top|
-    /// --------------------
-    /// |left_bot|right_bot|
-    /// --------------------
-    /// whenever it is possible.
+    /// Creates a `Vec2d` from `Vec2d`'s `left_top`, `right_top`, `left_bot` and `right_bot`.
+    /// ----------------------------
+    /// | `left_top` | `right_top` |
+    /// ----------------------------
+    /// | `left_bot` | `right_bot` |
+    /// ----------------------------
+    /// # Errors
+    /// If one of the following is not satisfied:
+    /// - `left_top.row_len() == left_bot.row_len()`,
+    /// - `right_top.row_len() == right_bot.row_len()`,
+    /// - `left_top.col_len() == right_top.col_len()`,
+    /// - `left_bot.col_len() == right_bot.col_len()`,
+    ///
+    /// the function returns error.
     pub fn merge(
         top_left: Self,
         top_right: Self,
@@ -369,19 +476,20 @@ impl<T> Vec2d<T> {
         Self::merge_horizontally(left, right)
     }
 
-    /// Given a col_idx, splits
-    /// ------   ------------
-    /// |self| = |left|right|
-    /// ------   ------------
-    /// in such a way ``left.nof_cols() = col_idx`` and ``right.nof_cols() = self.nof_cols() - col_idx``.
-    /// # Safety: the caller must ensure that ``col_idx`` in ``1..self.nof_cols()``
+    /// Given a `col_idx`, splits `Vec2d` into
+    /// --------------------
+    /// | `left` | `right` |
+    /// --------------------
+    /// in such a way `left.nof_cols() = col_idx` and `right.nof_cols() = self.nof_cols() - col_idx`.
+    /// # Safety
+    /// The caller must ensure that `col_idx` in `1..self.nof_cols()`.
     #[must_use]
     pub unsafe fn split_horizontally_unchecked(self, col_idx: usize) -> (Self, Self) {
         let nof_rows = self.nof_rows();
         let nof_cols = self.nof_cols();
 
         let mut left_buffer = self.buffer;
-        let right_buffer = left_buffer.split_off(col_idx.saturating_mul(self.nof_rows));
+        let right_buffer = left_buffer.split_off(col_idx.strict_mul(self.nof_rows));
         let left = Self {
             buffer: left_buffer,
             nof_cols: col_idx,
@@ -390,58 +498,57 @@ impl<T> Vec2d<T> {
 
         let right = Self {
             buffer: right_buffer,
-            nof_cols: nof_cols.saturating_sub(col_idx),
+            nof_cols: nof_cols.strict_sub(col_idx),
             nof_rows,
         };
 
         (left, right)
     }
 
-    /// Given a col_idx, splits
-    /// ------   ------------
-    /// |self| = |left|right|
-    /// ------   ------------
-    /// in such a way left.nof_cols() = col_idx (and right.nof_cols() = self.nof_cols() - col_idx).
-    /// Otherwise returns error
+    /// Given a `col_idx`, splits `Vec2d` into
+    /// --------------------
+    /// | `left` | `right` |
+    /// --------------------
+    /// in such a way `left.nof_cols() = col_idx` and `right.nof_cols() = self.nof_cols() - col_idx`.
     /// # Errors
+    ///  If `col_idx` is not in `1..self.nof_cols()`, the function returns error.
     pub fn split_horizontally(self, col_idx: usize) -> Result<(Self, Self), Vec2dError> {
         let col_len = self.col_len();
         (0 < col_idx && col_idx < self.nof_cols())
             .then(|| unsafe { self.split_horizontally_unchecked(col_idx) })
-            .ok_or(Vec2dError::ColIdxOutOfBounds { col_idx, col_len })
-    }
-
-    /// Given a row_idx, splits
-    /// ------   -----
-    /// |self| = |top|
-    /// ------   -----
-    /// ///      |bot|
-    /// ///      -----
-    /// in such a way top.nof_rows() = row_idx (and bot.nof_rows() = self.nof_rows() - rows_idx).
-    /// Otherwise returns error.
-    /// # Errors
-    pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
-        let row_len = self.row_len();
-        (0 < row_idx && row_idx < self.nof_rows())
-            .then(|| {
-                self.transpose();
-                let (mut top, mut bot) = unsafe { self.split_horizontally_unchecked(row_idx) };
-                top.transpose();
-                bot.transpose();
-                (top, bot)
+            .ok_or(Vec2dError::IdxOutOfBounds {
+                idx: col_idx,
+                bound: col_len,
             })
-            .ok_or(Vec2dError::RowIdxOutOfBounds { row_idx, row_len })
     }
 
-    /// Given a col_idx and row_idx, splits
-    /// ------   --------------------
-    /// |self| = |top_left|top_right|
-    /// ------   --------------------
-    /// ///      |bot_left|bot_right|
-    /// ///      --------------------
-    /// in such a way top_left.shape() = (col_idx, row_idx)
-    /// whenever it is possible.
+    /// Given a `row_idx`, splits `Vec2d` into
+    /// ---------
+    /// | `top` |
+    /// ---------
+    /// | `bot` |
+    /// ---------
+    /// in such a way `top.nof_rows() = row_idx` and `bot.nof_rows() = self.nof_rows() - row_idx`.
     /// # Errors
+    ///  If `row_idx` is not in `1..self.nof_rows()`, the function returns error.
+    pub fn split_vertically(mut self, row_idx: usize) -> Result<(Self, Self), Vec2dError> {
+        self.transpose();
+        let (mut top, mut bot) = self.split_horizontally(row_idx)?;
+        top.transpose();
+        bot.transpose();
+        Ok((top, bot))
+    }
+
+    /// Given a `col_idx` and `row_idx`, splits a `Vec2d` into
+    ///  --------------------------------
+    ///  | `top_left` | `top_right` |
+    ///  --------------------------------
+    ///  | `bot_left` | `bot_right` |
+    ///  --------------------------------
+    /// in such a way that `top_left.shape() = (col_idx, row_idx)`.
+    /// # Errors
+    /// If `col_idx` is not in `1..self.nof_cols()` and `row_idx` is not in `1..self.nof_rows()`,
+    /// the function returns error.
     pub fn split(
         self,
         col_idx: usize,
@@ -453,111 +560,93 @@ impl<T> Vec2d<T> {
         Ok((top_left, top_right, bot_left, bot_right))
     }
 
-    /// Modifies a 2d vector of a form
-    /// -----------
-    /// |*|i|*|j|*|
-    /// -----------
-    /// to
-    /// -----------
-    /// |*|j|*|i|*|
-    /// -----------
-    /// whenever indices are in proper bounds.
+    /// Swaps collumns of indices `i` and `j`.
     /// # Safety
-    /// Note that
-    /// i * col_len + idx <= (nof_cols - 1) * col_len + col_len - 1 = nof_cols * col_len - 1
-    /// and similarly for j.
+    /// The caller must ensure that `i`, `j` < `self.nof_cols()`.
+    pub unsafe fn swap_cols_unchecked(&mut self, i: usize, j: usize) {
+        if i != j {
+            let col_len = self.col_len();
+            (0..col_len)
+                .map(|idx| {
+                    (
+                        i.strict_mul(col_len).strict_add(idx),
+                        j.strict_mul(col_len).strict_add(idx),
+                    )
+                })
+                .for_each(|(col_i_idx, col_j_idx)| {
+                    self.buffer.swap_unchecked(col_i_idx, col_j_idx);
+                });
+        }
+    }
+
+    /// Swaps collumns of indices `i` and `j`.
     /// # Errors
+    /// If `i`, or `j` is greater or equal than `self.nof_cols()`, function returns error.
     pub fn swap_cols(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
         let nof_cols = self.nof_cols();
-        let col_len = self.col_len();
 
         if i >= nof_cols {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: i,
-                row_len: nof_cols,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: nof_cols,
             })
         } else if j >= nof_cols {
-            Err(Vec2dError::RowIdxOutOfBounds {
-                row_idx: j,
-                row_len: nof_cols,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: nof_cols,
             })
         } else {
-            if i != j {
-                (0..col_len)
-                    .map(|idx| {
-                        (
-                            i.saturating_mul(col_len).saturating_add(idx),
-                            j.saturating_mul(col_len).saturating_add(idx),
-                        )
-                    })
-                    .for_each(|(col_i_idx, col_j_idx)| unsafe {
-                        self.buffer.swap_unchecked(col_i_idx, col_j_idx);
-                    });
-            }
+            unsafe {
+                self.swap_cols_unchecked(i, j);
+            };
             Ok(())
         }
     }
 
-    /// Modifies a 2d vector of a form
-    /// ---
-    /// |*|
-    /// ---
-    /// |i|
-    /// ---
-    /// |*|
-    /// ---
-    /// |j|
-    /// ---
-    /// |*|
-    /// ---
-    /// to
-    /// ---
-    /// |*|
-    /// ---
-    /// |j|
-    /// ---
-    /// |*|
-    /// ---
-    /// |i|
-    /// ---
-    /// |*|
-    /// ---
-    /// whenever indices are in proper bounds.
+    /// Swaps rows of indices `i` and `j`.
     /// # Safety
-    /// Note that
-    /// i * row_len + idx <= (nof_rows - 1) * row_len + row_len - 1 = nof_rows * row_len - 1
-    /// and similarly for j.
+    /// The caller must ensure that `i`, `j` < `self.nof_rows()`.
+    pub unsafe fn swap_rows_unchecked(&mut self, i: usize, j: usize) {
+        let row_len = self.row_len();
+        let nof_rows = self.nof_rows();
+        if i != j {
+            (0..row_len)
+                .map(|idx| {
+                    (
+                        i.strict_add(nof_rows.strict_mul(idx)),
+                        j.strict_add(nof_rows.strict_mul(idx)),
+                    )
+                })
+                .for_each(|(row_i_idx, row_j_idx)| {
+                    self.buffer.swap_unchecked(row_i_idx, row_j_idx);
+                });
+        }
+    }
+
+    /// Swaps rows of indices `i` and `j`.
     /// # Errors
+    /// If `i`, or `j` is greater or equal than `self.nof_rows()`, function returns error.
     pub fn swap_rows(&mut self, i: usize, j: usize) -> Result<(), Vec2dError> {
         let nof_rows = self.nof_rows();
-        let row_len = self.row_len();
 
         if i >= nof_rows {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: i,
-                col_len: nof_rows,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: i,
+                bound: nof_rows,
             })
         } else if j >= nof_rows {
-            Err(Vec2dError::ColIdxOutOfBounds {
-                col_idx: j,
-                col_len: nof_rows,
+            Err(Vec2dError::IdxOutOfBounds {
+                idx: j,
+                bound: nof_rows,
             })
         } else {
-            if i != j {
-                (0..row_len)
-                    .map(|idx| {
-                        (
-                            i.saturating_add(nof_rows.saturating_mul(idx)),
-                            j.saturating_add(nof_rows.saturating_mul(idx)),
-                        )
-                    })
-                    .for_each(|(row_i_idx, row_j_idx)| unsafe {
-                        self.buffer.swap_unchecked(row_i_idx, row_j_idx);
-                    });
+            unsafe {
+                self.swap_rows_unchecked(i, j);
             }
             Ok(())
         }
     }
+
     #[must_use]
     pub fn from_vec_2d<U: Into<T>>(vec2d: Vec2d<U>) -> Self {
         let nof_cols = vec2d.nof_cols();
@@ -582,18 +671,38 @@ impl<T> Vec2d<T> {
         Vec2d::<U> {
             nof_cols,
             nof_rows,
-            buffer: self
-                .buffer
-                .into_iter()
-                .map(|value| (value).into())
-                .collect::<Vec<_>>(),
+            buffer: self.buffer.into_iter().map(Into::into).collect::<Vec<_>>(),
         }
+    }
+}
+
+impl<T: Copy> Vec2d<T> {
+    /// Given an `ExactSizeIterator<T>`, generate all the `Vec2d`'s with entries being the
+    /// elements of this iterator.
+    pub fn elements<E: ExactSizeIterator<Item = T>>(
+        nof_cols: usize,
+        nof_rows: usize,
+        elements_iterator: E,
+    ) -> impl Iterator<Item = Self> {
+        let elements = elements_iterator.collect::<Vec<_>>();
+
+        (0..nof_cols.strict_mul(nof_rows))
+            .map(|_| (0..elements.len()))
+            .multi_cartesian_product()
+            .map(move |buffer_indices: Vec<usize>| Self {
+                nof_cols,
+                nof_rows,
+                buffer: buffer_indices
+                    .into_iter()
+                    .map(|idx|unsafe {*elements.get_unchecked(idx)})
+                    .collect::<Vec<_>>(),
+            })
     }
 }
 
 impl<T: fmt::Display> fmt::Display for Vec2d<T> {
     /// Displays the 2d vector in a format
-    /// (self.nof_cols() x self.nof_rows())
+    /// (`self.nof_cols()` x `self.nof_rows()`)
     /// [*, *, *]
     /// [*, *, *]
     /// The values are padded.
@@ -606,7 +715,7 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
         let padding: usize = elementwise_stringified
             .iter()
             .flatten()
-            .map(|entry| entry.len())
+            .map(String::len)
             .max()
             .unwrap_or(0);
 
@@ -614,11 +723,13 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
             .into_iter()
             .map(|row| {
                 row.into_iter()
-                    .map(|entry| format!("{}{}", " ".repeat(padding - entry.len()), entry))
+                    .map(|entry| {
+                        format!("{}{}", " ".repeat(padding.strict_sub(entry.len())), entry)
+                    })
                     .collect::<Vec<_>>()
                     .join(", ")
             })
-            .map(|row_stringified| format!("[{}]", row_stringified))
+            .map(|row_stringified| format!("[{row_stringified}]"))
             .collect::<Vec<_>>()
             .join("\n");
         write!(
@@ -631,31 +742,8 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
     }
 }
 
-impl<T: Finite> Vec2d<T> {
-    pub fn elements(
-        nof_cols: usize,
-        nof_rows: usize,
-    ) -> impl Iterator<Item = Vec2d<<T as crate::ring::Finite>::Output>> {
-        let elements = T::elements().collect::<Vec<_>>();
-        (0..nof_cols * nof_rows)
-            .map(|_| (0..elements.len()))
-            .multi_cartesian_product()
-            .map(
-                move |buffer_indices: Vec<usize>| Vec2d::<<T as crate::ring::Finite>::Output> {
-                    nof_cols,
-                    nof_rows,
-                    buffer: buffer_indices
-                        .into_iter()
-                        .map(|idx| elements[idx])
-                        .collect::<Vec<_>>(),
-                },
-            )
-    }
-}
-
 #[cfg(test)]
 mod test {
-    // In asserts use only internal data strucures.
     use super::*;
 
     #[test]
@@ -675,6 +763,7 @@ mod test {
 
     #[test]
     fn from_cols_vec() {
+        #[allow(clippy::all, reason = "shut up")]
         let vec = vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']];
         let vec2d = Vec2d::from_cols_vec(vec).expect("This should be well-defined");
         assert_eq!(vec2d.shape(), (3, 2));
@@ -684,10 +773,14 @@ mod test {
     #[test]
     fn from_cols_empty_iterator() {
         let empty_vec: Vec<Vec<u8>> = vec![];
-        let empty_vec2d = Vec2d::from_cols(empty_vec.into_iter().map(|col| col.into_iter()));
+        let empty_vec2d = Vec2d::from_cols(
+            empty_vec
+                .into_iter()
+                .map(std::iter::IntoIterator::into_iter),
+        );
         assert_eq!(
             empty_vec2d.expect_err("This should be empty 2d vector"),
-            Vec2dError::EmptyColsIterator
+            Vec2dError::EmptyIterator
         );
     }
 
@@ -697,19 +790,18 @@ mod test {
         let different_col_lens_vec2d = Vec2d::from_cols(
             different_col_lens_vec
                 .into_iter()
-                .map(|col| col.into_iter()),
+                .map(std::iter::IntoIterator::into_iter),
         );
         assert_eq!(
             different_col_lens_vec2d
                 .expect_err("This should be non-empty but have different col lens."),
-            Vec2dError::DifferentLengthsColsIterator
+            Vec2dError::IteratorLengthsMismatch
         );
     }
 
     #[test]
     fn col() {
-        let vec = Vec2d::from_cols_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
-            .expect("This should be well-defined.");
+        let vec = Vec2d::from_cols_arr([[1, 1], [2, 2], [3, 3], [0, 0]]);
         assert_eq!(
             vec.col(0)
                 .expect("This should be well-defined.")
@@ -722,21 +814,20 @@ mod test {
                 .expect("This should be well-defined.")
                 .copied()
                 .collect::<Vec<_>>(),
-            vec![0, 0]
+            { vec![0, 0] }
         );
         assert_eq!(
-            unsafe { vec.col(7).unwrap_err_unchecked() },
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 7,
-                row_len: vec.row_len()
+            vec.col(7).err().expect("This should fail."),
+            Vec2dError::IdxOutOfBounds {
+                idx: 7,
+                bound: vec.row_len()
             }
         );
     }
 
     #[test]
     fn col_mut() {
-        let mut vec = Vec2d::from_cols_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![4, 4]])
-            .expect("This should be well-defined.");
+        let mut vec = Vec2d::from_cols_arr([[1, 1], [2, 2], [3, 3], [4, 4]]);
         let mut vec1 = vec.clone();
 
         vec.col_mut(0)
@@ -748,11 +839,8 @@ mod test {
         );
 
         assert_eq!(
-            unsafe { vec1.col_mut(8).unwrap_err_unchecked() },
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 8,
-                row_len: 4
-            }
+            vec1.col_mut(8).err().expect("This should fail."),
+            Vec2dError::IdxOutOfBounds { idx: 8, bound: 4 }
         );
     }
 
@@ -767,9 +855,12 @@ mod test {
         let vec = Vec2d::from_cols_arr([['a', 'b', 'c'], ['d', 'e', 'f']]);
         let mut vec_t = vec.clone();
         vec_t.transpose();
-        assert_eq!(vec_t.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
         assert_eq!(vec.nof_rows(), vec_t.nof_cols());
         assert_eq!(vec.nof_cols(), vec_t.nof_rows());
+        println!("{vec}");
+        println!("{vec_t}");
+
+        assert_eq!(vec_t.buffer, vec!['a', 'd', 'b', 'e', 'c', 'f']);
     }
 
     #[test]
@@ -777,9 +868,9 @@ mod test {
         let vec = Vec2d::from_cols_arr([['a', 'd'], ['b', 'e'], ['c', 'f']]);
         let mut vec_t = vec.clone();
         vec_t.transpose();
-        assert_eq!(vec_t.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
         assert_eq!(vec.nof_rows(), vec_t.nof_cols());
         assert_eq!(vec.nof_cols(), vec_t.nof_rows());
+        assert_eq!(vec_t.buffer, vec!['a', 'b', 'c', 'd', 'e', 'f']);
     }
 
     #[test]
@@ -802,10 +893,10 @@ mod test {
     #[test]
     fn from_rows_empty_iterator() {
         let empty_vec: Vec<Vec<u8>> = vec![];
-        let empty_vec2d = Vec2d::from_rows(empty_vec.into_iter().map(|row| row.into_iter()));
+        let empty_vec2d = Vec2d::from_rows(empty_vec.into_iter().map(IntoIterator::into_iter));
         assert_eq!(
             empty_vec2d.expect_err("This should be empty 2d vector"),
-            Vec2dError::EmptyRowsIterator
+            Vec2dError::EmptyIterator
         );
     }
 
@@ -815,12 +906,12 @@ mod test {
         let different_row_lens_vec2d = Vec2d::from_rows(
             different_row_lens_vec
                 .into_iter()
-                .map(|row| row.into_iter()),
+                .map(IntoIterator::into_iter),
         );
         assert_eq!(
             different_row_lens_vec2d
                 .expect_err("This should be non-empty but have different row lens."),
-            Vec2dError::DifferentLengthsRowsIterator
+            Vec2dError::IteratorLengthsMismatch
         );
     }
 
@@ -832,8 +923,7 @@ mod test {
 
     #[test]
     fn row() {
-        let vec = Vec2d::from_rows_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![0, 0]])
-            .expect("This should be well-defined.");
+        let vec = Vec2d::from_rows_arr([[1, 1], [2, 2], [3, 3], [0, 0]]);
         assert_eq!(
             vec.row(0)
                 .expect("This should be well-defined.")
@@ -849,18 +939,17 @@ mod test {
             vec![0, 0]
         );
         assert_eq!(
-            unsafe { vec.row(7).unwrap_err_unchecked() },
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 7,
-                col_len: vec.col_len()
+            vec.row(7).err().expect("This should fail."),
+            Vec2dError::IdxOutOfBounds {
+                idx: 7,
+                bound: vec.col_len()
             }
         );
     }
 
     #[test]
     fn row_mut() {
-        let mut vec = Vec2d::from_rows_vec(vec![vec![1, 1], vec![2, 2], vec![3, 3], vec![4, 4]])
-            .expect("This should be well-defined.");
+        let mut vec = Vec2d::from_rows_arr([[1, 1], [2, 2], [3, 3], [4, 4]]);
         let mut vec1 = vec.clone();
 
         vec.row_mut(0)
@@ -873,19 +962,14 @@ mod test {
 
         assert_eq!(
             unsafe { vec1.row_mut(8).unwrap_err_unchecked() },
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 8,
-                col_len: 4
-            }
+            Vec2dError::IdxOutOfBounds { idx: 8, bound: 4 }
         );
     }
 
     #[test]
     fn merge_horizontally() {
-        let vec2d_1 = Vec2d::from_cols_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let vec2d_2 =
-            Vec2d::from_cols_vec(vec![vec![7, 8, 9]]).expect("This should be well-defined.");
+        let vec2d_1 = Vec2d::from_cols_arr([[1, 2, 3], [4, 5, 6]]);
+        let vec2d_2 = Vec2d::from_cols_arr([[7, 8, 9]]);
         let vec2d =
             Vec2d::merge_horizontally(vec2d_1, vec2d_2).expect("The merge should be well-defined.");
 
@@ -895,26 +979,22 @@ mod test {
 
     #[test]
     fn merge_horizontally_different_col_lens() {
-        let u = Vec2d::from_cols_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let v =
-            Vec2d::from_cols_vec(vec![vec![7, 8, 9, 10]]).expect("This should be well-defined.");
+        let u = Vec2d::from_cols_arr([[1, 2, 3], [4, 5, 6]]);
+        let v = Vec2d::from_cols_arr([[7, 8, 9, 10]]);
         let vec = Vec2d::merge_horizontally(u.clone(), v.clone());
         assert_eq!(
             vec.expect_err("The merge should fail."),
-            Vec2dError::DifferentColLengths {
-                left_col_len: u.col_len(),
-                right_col_len: v.col_len()
+            Vec2dError::DifferentLengths {
+                left_len: u.col_len(),
+                right_len: v.col_len()
             }
         );
     }
 
     #[test]
     fn merge_vertically() {
-        let u = Vec2d::from_rows_vec(vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']])
-            .expect("This should be well-defined.");
-        let v =
-            Vec2d::from_rows_vec(vec![vec!['g', 'h', 'i']]).expect("This should be well-defined.");
+        let u = Vec2d::from_rows_arr([['a', 'b', 'c'], ['d', 'e', 'f']]);
+        let v = Vec2d::from_rows_arr([['g', 'h', 'i']]);
 
         let vec = Vec2d::merge_vertically(u, v).expect("The merge should be well-defined.");
 
@@ -927,36 +1007,26 @@ mod test {
 
     #[test]
     fn merge_vertically_different_row_lens() {
-        let u = Vec2d::from_rows_vec(vec![vec!['a', 'b', 'c'], vec!['d', 'e', 'f']])
-            .expect("This should be well-defined.");
-        let v = Vec2d::from_rows_vec(vec![vec!['g', 'h', 'i', 'j']])
-            .expect("This should be well-defined.");
+        let u = Vec2d::from_rows_arr([['a', 'b', 'c'], ['d', 'e', 'f']]);
+        let v = Vec2d::from_rows_arr([['g', 'h', 'i', 'j']]);
 
         let vec = Vec2d::merge_vertically(u.clone(), v.clone());
 
         assert_eq!(
             vec.expect_err("The merge should fail."),
-            Vec2dError::DifferentRowLengths {
-                top_row_len: u.row_len(),
-                bot_row_len: v.row_len()
+            Vec2dError::DifferentLengths {
+                left_len: u.row_len(),
+                right_len: v.row_len()
             }
-        )
+        );
     }
 
     #[test]
     fn merge() {
-        let top_left =
-            Vec2d::from_cols_vec(vec![vec![1, 2, 3]]).expect("This should be well-defined.");
-        let top_right = Vec2d::from_cols_vec(vec![
-            vec![5, 6, 7],
-            vec![9, 10, 11],
-            vec![13, 14, 15],
-            vec![17, 18, 19],
-        ])
-        .expect("This should be well-defined.");
-        let bot_left = Vec2d::from_cols_vec(vec![vec![4]]).expect("This should be well-defined.");
-        let bot_right =
-            Vec2d::from_rows_vec(vec![vec![8, 12, 16, 20]]).expect("This should be well-defined.");
+        let top_left = Vec2d::from_cols_arr([[1, 2, 3]]);
+        let top_right = Vec2d::from_cols_arr([[5, 6, 7], [9, 10, 11], [13, 14, 15], [17, 18, 19]]);
+        let bot_left = Vec2d::from_cols_arr([[4]]);
+        let bot_right = Vec2d::from_rows_arr([[8, 12, 16, 20]]);
 
         let vec = Vec2d::merge(top_left, top_right, bot_left, bot_right)
             .expect("The merge should be well-defined.");
@@ -965,8 +1035,7 @@ mod test {
 
     #[test]
     fn split_horizontally() {
-        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
-        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+        let vec = Vec2d::from_rows_arr([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
         let (left, right) = vec
             .split_horizontally(1)
             .expect("The split should be well-defined.");
@@ -980,32 +1049,30 @@ mod test {
 
     #[test]
     fn split_horizontally_idx_out_of_bounds() {
-        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
-        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+        let vec = Vec2d::from_rows_arr([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
 
         let split_at_zero = vec.clone().split_horizontally(0);
         assert_eq!(
             split_at_zero.expect_err("The split should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 0,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 0,
+                bound: vec.col_len()
             }
         );
 
         let split_at_col_len = vec.clone().split_horizontally(vec.col_len());
         assert_eq!(
             split_at_col_len.expect_err("The split should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: vec.col_len(),
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: vec.col_len(),
+                bound: vec.col_len()
             }
         );
     }
 
     #[test]
     fn split_vertically() {
-        let rows = vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]];
-        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+        let vec = Vec2d::from_rows_arr([[1, 2, 3], [4, 5, 6], [7, 8, 9]]);
 
         let (top, bot) = vec
             .split_vertically(2)
@@ -1020,24 +1087,23 @@ mod test {
 
     #[test]
     fn split_vertically_idx_out_of_bounds() {
-        let rows = vec![vec![1, 2, 3], vec![4, 5, 6]];
-        let vec = Vec2d::from_rows_vec(rows).expect("This should we well-defined.");
+        let vec = Vec2d::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
 
         let split_at_zero = vec.clone().split_vertically(0);
         assert_eq!(
             split_at_zero.expect_err("The split should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 0,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 0,
+                bound: vec.row_len()
             }
         );
 
         let split_at_row_len = vec.clone().split_vertically(vec.row_len());
         assert_eq!(
             split_at_row_len.expect_err("The split should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: vec.row_len(),
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: vec.row_len(),
+                bound: vec.row_len()
             }
         );
     }
@@ -1080,9 +1146,9 @@ mod test {
             vec.clone()
                 .swap_cols(0, 5)
                 .expect_err("The swap should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 5,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.row_len()
             }
         );
 
@@ -1090,9 +1156,9 @@ mod test {
             vec.clone()
                 .swap_cols(5, 3)
                 .expect_err("The swap should fail."),
-            Vec2dError::RowIdxOutOfBounds {
-                row_idx: 5,
-                row_len: vec.row_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.row_len()
             }
         );
     }
@@ -1115,9 +1181,9 @@ mod test {
             vec.clone()
                 .swap_rows(0, 5)
                 .expect_err("The swap should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 5,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.col_len()
             }
         );
 
@@ -1125,9 +1191,9 @@ mod test {
             vec.clone()
                 .swap_rows(5, 2)
                 .expect_err("The swap should fail."),
-            Vec2dError::ColIdxOutOfBounds {
-                col_idx: 5,
-                col_len: vec.col_len()
+            Vec2dError::IdxOutOfBounds {
+                idx: 5,
+                bound: vec.col_len()
             }
         );
     }

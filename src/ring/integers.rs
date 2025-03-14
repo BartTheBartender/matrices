@@ -1,72 +1,53 @@
-use super::*;
-pub type Integer = i64;
-pub type Nat = u64;
-
-impl AbelianGroup for Integer {
-    fn zero() -> Self {
-        0
-    }
-}
-
+use super::{CommutativeRing, Euclidean, NonZero, Ring};
+pub type Integer = i32;
 impl Ring for Integer {
-    fn one() -> Self {
-        1
-    }
-
-    fn try_divide(a: Self, b: Self) -> Option<Self> {
-        (b != 0 && a % b == 0).then(|| a / b)
-    }
+    const ZERO: Self = 0;
+    const ONE: Self = 1;
 
     fn canonize(a: Self) -> (Self, Self) {
         (a.abs(), a.signum())
     }
-}
 
-impl Bezout for Integer {
-    fn gcd(a: Self, b: Self) -> (Self, Self, Self) {
-        fn gcd_helper(a: Integer, b: Integer) -> (Integer, Integer, Integer) {
-            match b {
-                0 => (a, 1, 0),
-                c => {
-                    let (gcd, x, y) = gcd_helper(c, a % c);
-                    (gcd, y, x - (a / c) * y)
-                }
-            }
-        }
-
-        let (gcd, x, y) = gcd_helper(a, b);
-        (
-            gcd * Integer::signum(gcd),
-            x * Integer::signum(gcd),
-            y * Integer::signum(gcd),
-        )
+    fn try_left_divide(self, b: Self) -> Option<Self> {
+        (b != 0).then(|| self / b)
     }
 
+    fn try_right_divide(self, b: Self) -> Option<Self> {
+        (b != 0).then(|| self / b)
+    }
 }
 
-impl Noetherian for Integer {}
-
-impl Euclidian for Integer {
-    fn norm(a: Self) -> Option<NonZero<Nat>> {
-        NonZero::new(a.unsigned_abs())
-    }
-
-    fn divide_with_reminder(a: Self, b: Self) -> (Self, Self) {
-        (a / b, a % b)
+impl CommutativeRing for Integer {}
+impl Euclidean for Integer {
+    #[allow(
+        clippy::as_conversions,
+        reason = "I use 64 bit architecture"
+    )]
+    fn norm(a: Self) -> Option<NonZero<usize>> {
+        NonZero::new(a.unsigned_abs() as usize)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ring::Gcd;
     #[test]
     fn gcd() {
-        assert_eq!(Integer::gcd(2, 3), (1, -1, 1));
+        assert_eq!(Integer::extended_gcd(2, 3), (1, -1, 1));
     }
 
     #[test]
-    fn gcd_negative() {
-        assert_eq!(Integer::gcd(-2, -3), (1, 1, -1));
+    fn extended_gcd_negative() {
+        assert_eq!(Integer::extended_gcd(-2, -3), (1, 1, -1));
+    }
+
+    #[test]
+    fn canonize() {
+        let x : Integer = -58;
+        let (x_canon, to_canon) = Integer::canonize(x);
+        assert_eq!(x_canon, 58);
+        assert_eq!(to_canon, -1);
     }
 
     #[test]
@@ -83,16 +64,5 @@ mod test {
             Integer::dot_product(vec![1, 2, 3].into_iter(), vec![3, 2, 1].into_iter()),
             10
         );
-    }
-
-    #[test]
-    fn divide_with_reminder() {
-        use rand::random;
-        (0..1000)
-            .map(|_| (random::<Integer>(), random::<Integer>()))
-            .for_each(|(a, b)| {
-                let (q, r) = Integer::divide_with_reminder(a, b);
-                assert_eq!(a, q * b + r)
-            });
     }
 }

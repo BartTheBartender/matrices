@@ -16,6 +16,7 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(inherent_associated_types)]
 #![feature(strict_overflow_ops)]
 #![feature(concat_idents)]
+#![feature(associated_type_defaults)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -26,21 +27,21 @@ however, a bug inside it prevents using type aliases for other types
     // regular groups
     clippy::all, // just in case
     clippy::nursery,
-    clippy::pedantic,
+    //clippy::pedantic,
     clippy::style,
     clippy::complexity,
     clippy::perf,
 
     // debugging remnants
-    clippy::dbg_macro,
+    //clippy::dbg_macro,
     //clippy::expect_used,
-    //clippy::panic,
+    clippy::panic,
     clippy::print_stderr,
     //clippy::print_stdout,
     //clippy::todo,
     clippy::unimplemented,
     clippy::unreachable,
-    //clippy::use_debug,
+    clippy::use_debug,
     //clippy::unwrap_used,
 
     // restricions
@@ -80,7 +81,7 @@ however, a bug inside it prevents using type aliases for other types
     // restrictions
     clippy::as_conversions,
     clippy::allow_attributes_without_reason,
-    clippy::default_numeric_fallback,
+    //clippy::default_numeric_fallback,
     clippy::exit,
     clippy::indexing_slicing,
     clippy::lossy_float_literal,
@@ -96,13 +97,14 @@ however, a bug inside it prevents using type aliases for other types
     clippy::semicolon_inside_block,
     clippy::unnecessary_self_imports,
     clippy::unneeded_field_pattern,
-    clippy::unseparated_literal_suffix,
+    //clippy::unseparated_literal_suffix,
 )]
 /* clippy end */
 
 pub mod matrix;
-pub mod ring;
 
-#[cfg(test)]
-pub mod playground {
-}
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "the ring uses mathematical notation"
+)]
+pub mod ring;
