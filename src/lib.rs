@@ -17,6 +17,7 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(strict_overflow_ops)]
 #![feature(concat_idents)]
 #![feature(associated_type_defaults)]
+#![feature(adt_const_params)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -101,6 +102,10 @@ however, a bug inside it prevents using type aliases for other types
 )]
 /* clippy end */
 
-pub mod matrix;
-pub mod ring;
+//pub mod matrix;
 
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "the ring uses mathematical notation"
+)]
+pub mod ring;
