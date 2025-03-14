@@ -1,29 +1,23 @@
 pub mod cyclic;
 pub mod integers;
 
-macro_rules! unsigned_type {
-    (i8) => {
+macro_rules! twice_smaller_unsigned_type {
+    (i16) => {
         u8
     };
-    (i16) => {
+    (i32) => {
         u16
     };
-    (i32) => {
+    (i64) => {
         u32
     };
-    (i64) => {
-        u64
-    };
     (i128) => {
-        u128
-    };
-    (isize) => {
-        usize
+        u64
     };
 }
 
-pub type Integer = i8;
-pub type Natural = unsigned_type!(i8);
+pub type Integer = i32;
+pub type Natural = twice_smaller_unsigned_type!(i32);
 
 use std::{
     hash::Hash,
@@ -76,7 +70,7 @@ pub trait Ring:
     fn right_divides(a: Self, b: Self) -> bool {
         Self::try_left_divide(a, b).is_some()
     }
-    
+
     /// This function returns a pair `(a_canon, to_canon)` such that
     /// - `a_canon` is associated to `a`
     /// - `a * to_canon = a_canon`
@@ -134,29 +128,42 @@ pub trait Principal = Noetherian + Gcd;
 /// `r = Self::rem(a,b)` such that `r = Self::zero()` or `Self::norm(r) < Self::norm(b)`.
 pub trait Euclidean: CommutativeRing + Div<Output = Self> + Rem<Output = Self> {
     /// The euclidian norm.
-    fn norm(a: Self) -> Option<NonZero<Natural>>;
+    fn norm(a: Self) -> Option<NonZero<usize>>;
 
     fn try_divide(a: Self, b: Self) -> Option<Self> {
         (b != Self::ZERO).then(|| a / b)
     }
 }
 
-impl<R: Euclidean> EuclideanAlgorithm for R {
-    const ZERO: Self = R::ZERO;
-    const ONE: Self = R::ONE;
-}
-
+#[allow(clippy::many_single_char_names, reason = "these are math functions")]
 impl<R: Euclidean> Gcd for R {
-    #[inline]
     fn extended_gcd(a: Self, b: Self) -> (Self, Self, Self) {
-        let (gcd, x, y) = Self::extended_euclidean_algorithm(a, b);
+        #[inline]
+        fn extended_euclidean_algorithm<R: Euclidean>(a: R, b: R) -> (R, R, R) {
+            if b == R::ZERO {
+                (a, R::ONE, R::ZERO)
+            } else {
+                let (g, x, y) = extended_euclidean_algorithm(b, a % b);
+                (g, y, x - (a / b) * y)
+            }
+        }
+
+        let (gcd, x, y) = extended_euclidean_algorithm(a, b);
         let (gcd_canon, to_canon) = Self::canonize(gcd);
         (gcd_canon, x * to_canon, y * to_canon)
     }
 
-    #[inline]
     fn gcd(a: Self, b: Self) -> Self {
-        let g = Self::euclidean_algorithm(a, b);
+        #[inline]
+        fn euclidean_algorithm<R: Euclidean>(a: R, b: R) -> R {
+            if b == R::ZERO {
+                a
+            } else {
+                euclidean_algorithm(b, a % b)
+            }
+        }
+
+        let g = euclidean_algorithm(a, b);
         let (g_canon, _) = Self::canonize(g);
         g_canon
     }
@@ -166,45 +173,4 @@ impl<R: Euclidean> Gcd for R {
 pub trait Finite: Sized + Copy + Hash {
     type Output: Copy + Hash = Self;
     fn elements() -> impl ExactSizeIterator<Item = Self::Output>;
-}
-
-/// This trait is private, since it is used only to implement generic
-/// Euclidean algorithm for Integer and Natural.
-trait EuclideanAlgorithm:
-    PartialEq
-    + Eq
-    + Copy
-    + Sized
-    + Add<Output = Self>
-    + Sub<Output = Self>
-    + Mul<Output = Self>
-    + Div<Output = Self>
-    + Rem<Output = Self>
-{
-    const ZERO: Self;
-    const ONE: Self;
-
-    /// Returns `(g,x,y)` such that `g = gcd(a,b)` and `a * x + b * y = g`.
-    fn extended_euclidean_algorithm(a: Self, b: Self) -> (Self, Self, Self) {
-        if b == Self::ZERO {
-            (a, Self::ONE, Self::ZERO)
-        } else {
-            let (g, x, y) = Self::extended_euclidean_algorithm(b, a % b);
-            (g, y, x - (a / b) * y)
-        }
-    }
-
-    /// Returns `gcd(a,b)`.
-    fn euclidean_algorithm(a: Self, b: Self) -> Self {
-        if b == Self::ZERO {
-            a
-        } else {
-            Self::euclidean_algorithm(b, a % b)
-        }
-    }
-}
-
-impl EuclideanAlgorithm for Natural {
-    const ZERO: Self = 0;
-    const ONE: Self = 1;
 }

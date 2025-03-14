@@ -1,4 +1,4 @@
-use super::{CommutativeRing, Euclidean, Integer, Natural, NonZero, Ring};
+use super::{CommutativeRing, Euclidean, Integer, NonZero, Ring};
 
 impl Ring for Integer {
     const ZERO: Self = 0;
@@ -19,8 +19,12 @@ impl Ring for Integer {
 
 impl CommutativeRing for Integer {}
 impl Euclidean for Integer {
-    fn norm(a: Self) -> Option<NonZero<Natural>> {
-        NonZero::new(a.unsigned_abs())
+    #[allow(
+        clippy::as_conversions,
+        reason = "I use 64 bit architecture"
+    )]
+    fn norm(a: Self) -> Option<NonZero<usize>> {
+        NonZero::new(a.unsigned_abs() as usize)
     }
 }
 
