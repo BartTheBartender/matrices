@@ -17,7 +17,6 @@ however, a bug inside it prevents using type aliases for other types
 #![feature(strict_overflow_ops)]
 #![feature(concat_idents)]
 #![feature(associated_type_defaults)]
-#![feature(adt_const_params)]
 // visual separator
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
@@ -28,7 +27,7 @@ however, a bug inside it prevents using type aliases for other types
     // regular groups
     clippy::all, // just in case
     clippy::nursery,
-    clippy::pedantic,
+    //clippy::pedantic,
     clippy::style,
     clippy::complexity,
     clippy::perf,
@@ -98,7 +97,7 @@ however, a bug inside it prevents using type aliases for other types
     clippy::semicolon_inside_block,
     clippy::unnecessary_self_imports,
     clippy::unneeded_field_pattern,
-    clippy::unseparated_literal_suffix,
+    //clippy::unseparated_literal_suffix,
 )]
 /* clippy end */
 

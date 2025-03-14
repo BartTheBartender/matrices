@@ -1,29 +1,29 @@
 pub mod cyclic;
 pub mod integers;
 
-macro_rules! twice_smaller_unsigned_type {
-    (i16) => {
-        u8
-    };
-    (i32) => {
-        u16
-    };
-    (i64) => {
-        u32
-    };
-    (i128) => {
-        u64
-    };
-}
-
-pub type Integer = i32;
-pub type Natural = twice_smaller_unsigned_type!(i32);
+//macro_rules! twice_smaller_unsigned_type {
+//    (i16) => {
+//        u8
+//    };
+//    (i32) => {
+//        u16
+//    };
+//    (i64) => {
+//        u32
+//    };
+//    (i128) => {
+//        u64
+//    };
+//}
 
 use std::{
     hash::Hash,
     num::NonZero,
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
+
+pub use integers::Integer;
+//pub use cyclic::Natural;
 
 pub trait Ring:
     Add<Output = Self>
@@ -67,8 +67,8 @@ pub trait Ring:
     }
 
     /// determines if there exists `c` such that `b = a * c`
-    fn right_divides(a: Self, b: Self) -> bool {
-        Self::try_left_divide(a, b).is_some()
+    fn right_divides(self, b: Self) -> bool {
+        Self::try_right_divide(b, self).is_some()
     }
 
     /// This function returns a pair `(a_canon, to_canon)` such that
@@ -86,12 +86,12 @@ pub trait Ring:
 }
 
 pub trait CommutativeRing: Ring {
-    fn try_divide(a: Self, b: Self) -> Option<Self> {
-        <Self as Ring>::try_left_divide(a, b)
+    fn try_divide(self, b: Self) -> Option<Self> {
+        self.try_left_divide(b)
     }
 
-    fn divides(a: Self, b: Self) -> bool {
-        <Self as Ring>::left_divides(a, b)
+    fn divides(self, b: Self) -> bool {
+        Self::try_divide(b, self).is_some()
     }
 
     fn is_unit(a: Self) -> bool {
