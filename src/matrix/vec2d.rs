@@ -15,7 +15,7 @@ custom_error! {
 }
 
 /// Struct representing 2d vector, optimized for collumn operations.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Vec2d<T> {
     pub(super) buffer: Vec<T>,
     pub(super) nof_rows: usize,
@@ -694,7 +694,7 @@ impl<T: Copy> Vec2d<T> {
                 nof_rows,
                 buffer: buffer_indices
                     .into_iter()
-                    .map(|idx|unsafe {*elements.get_unchecked(idx)})
+                    .map(|idx| unsafe { *elements.get_unchecked(idx) })
                     .collect::<Vec<_>>(),
             })
     }
@@ -739,6 +739,12 @@ impl<T: fmt::Display> fmt::Display for Vec2d<T> {
             self.nof_cols(),
             stringified
         )
+    }
+}
+
+impl<T: fmt::Display> fmt::Debug for Vec2d<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 

@@ -238,7 +238,7 @@ impl<R: Ring> Matrix<R> {
     /// or None if such power doesn't exists.
     #[must_use]
     pub fn infinite_power(&self) -> Option<Self> {
-        let powers = vec![self.clone()];
+        let powers = [self.clone()].to_vec();
         self.infinite_power_helper(powers)
     }
     fn infinite_power_helper(&self, mut powers: Vec<Self>) -> Option<Self> {
@@ -518,10 +518,12 @@ mod test {
         );
     }
 
-    //#[test]
-    //fn lower_triangular() {
-    //    assert!(M::from_rows_arr([[]]).is_lower_triangular());
-    //}
+    #[test]
+    fn lower_triangular() {
+        assert!(
+            M::from_cols_arr([[1, 0, 0, 0], [2, 1, 0, 0], [3, 78, 9, 0]]).is_upper_triangular()
+        );
+    }
 
     #[test]
     fn zero() {

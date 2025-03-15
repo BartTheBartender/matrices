@@ -21,6 +21,7 @@ however, a bug inside it prevents using type aliases for other types
 #![allow(incomplete_features, reason = "we need nightly features")]
 #![allow(dead_code, reason = "to be removed later")] // REMOVE THIS LATER
 #![allow(clippy::module_name_repetitions, reason = "this is a dumb rule")]
+#![allow(unsafe_op_in_unsafe_fn, reason = "there are problems with clippy")]
 // - - -
 /* clippy begin */
 #![warn(
