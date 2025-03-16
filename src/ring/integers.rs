@@ -4,8 +4,8 @@ impl Ring for Integer {
     const ZERO: Self = 0;
     const ONE: Self = 1;
 
-    fn canonize(a: Self) -> (Self, Self) {
-        (a.abs(), a.signum())
+    fn canonize(a: Self) -> (Self, Self, Self) {
+        (a.abs(), a.signum(), a.signum())
     }
 
     fn try_left_divide(self, b: Self) -> Option<Self> {
@@ -45,7 +45,7 @@ mod test {
     #[test]
     fn canonize() {
         let x : Integer = -58;
-        let (x_canon, to_canon) = Integer::canonize(x);
+        let (x_canon, to_canon, _) = Integer::canonize(x);
         assert_eq!(x_canon, 58);
         assert_eq!(to_canon, -1);
     }

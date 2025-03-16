@@ -255,7 +255,8 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                             .expect("Indices of swapped cols of A are in proper bounds.");
                         Q.swap_cols(minor_idx, piv_col)
                             .expect("Indices of swapped cols of Q are in proper bounds.");
-                        Q_inv.swap_rows(minor_idx, piv_col)
+                        Q_inv
+                            .swap_rows(minor_idx, piv_col)
                             .expect("Indices of swapped rows of Q_inv are in proper bounds.");
                     }
                     Self::clear_row(&mut A, &mut Q, &mut Q_inv, minor_idx);
@@ -266,19 +267,28 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                             .expect("The bad and the minor indices in A should be well-defined.");
                         Q.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
-                        Q_inv.add_muled_row_to_row(-R::ONE, minor_idx, bad_idx)
+                        Q_inv
+                            .add_muled_row_to_row(-R::ONE, minor_idx, bad_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
-
                     } else {
-                        //let (_, to_canon) = R::canonize(
-                        //    *A.get(minor_idx, minor_idx)
-                        //        .expect("The pivot in canonizing should be well-defined."),
-                        //);
-                        //
-                        //A.mul_col_by(minor_idx, to_canon)
-                        //    .expect("Multiplying the col of A to canonize cannot fail.");
-                        //Q.mul_col_by(minor_idx, to_canon)
-                        //    .expect("Multiplying the col of Q to canonize cannot fail.");
+                        let (_, to_canon, from_canon) = R::canonize(
+                            *A.get(minor_idx, minor_idx)
+                                .expect("The pivot in canonizing should be well-defined."),
+                        );
+
+                        debug_assert_eq!(
+                            from_canon * to_canon,
+                            R::ONE,
+                            "Canonizing should be doune by invertible ring elements."
+                        );
+
+                        A.mul_col_by(minor_idx, to_canon)
+                            .expect("Multiplying the col of A to canonize cannot fail.");
+                        Q.mul_col_by(minor_idx, to_canon)
+                            .expect("Multiplying the col of Q to canonize cannot fail.");
+                        Q_inv
+                            .mul_row_by(minor_idx, from_canon)
+                            .expect("Multiplying the row of Q_inv to canonize cannot fail.");
 
                         break 'updating_minor;
                     }
@@ -294,6 +304,16 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
         debug_assert!(
             (&P) * (&A_old) * (&Q) == A,
             "The matrices P and Q are not a desired change of basis in snf."
+        );
+        debug_assert_eq!(
+            (&P) * (&P_inv),
+            Self::identity(A.nof_rows()),
+            "The matrix P_inv should be the inverse of P."
+        );
+        debug_assert_eq!(
+            (&Q) * (&Q_inv),
+            Self::identity(A.nof_cols()),
+            "The matrix Q_inv should be the inverse of Q."
         );
         (P, A, Q)
     }
@@ -315,7 +335,7 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                         .expect("The curr index is in proper bounds."),
                 )
             })
-            .all(|(&curr, &next)| /***R::is_canonized(curr) && */ R::divides(curr, next))
+            .all(|(&curr, &next)| R::is_canonized(curr) && R::divides(curr, next))
     }
 }
 
@@ -357,12 +377,16 @@ mod test {
     fn clear_row() {
         let A_old = matrix();
         let mut A = A_old.clone();
+
         let mut Q = M::identity(A.nof_cols());
         let mut Q_inv = M::identity(A.nof_cols());
+
         M::clear_row(&mut A, &mut Q, &mut Q_inv, 0);
+
         assert_eq!(A_old * (&Q), A);
         assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
         assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
@@ -373,12 +397,16 @@ mod test {
     fn clear_row_random() {
         let A_old = random_matrix(4, 3);
         let mut A = A_old.clone();
+
         let mut Q = M::identity(A.nof_cols());
         let mut Q_inv = M::identity(A.nof_cols());
+
         M::clear_row(&mut A, &mut Q, &mut Q_inv, 0);
+
         assert_eq!(A_old * (&Q), A);
         assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
         assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+
         A.row(0)
             .expect("The 0-th row exists.")
             .skip(1)
@@ -389,12 +417,16 @@ mod test {
     fn clear_col() {
         let A_old = matrix();
         let mut A = A_old.clone();
+
         let mut P = M::identity(A.nof_rows());
         let mut P_inv = M::identity(A.nof_rows());
+
         M::clear_col(&mut A, &mut P, &mut P_inv, 0);
+
         assert_eq!((&P) * A_old, A);
         assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
         assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
+
         A.col(0)
             .expect("The 0-th col exists.")
             .skip(1)
@@ -405,84 +437,112 @@ mod test {
     fn clear_col_random() {
         let A_old = random_matrix(5, 6);
         let mut A = A_old.clone();
+
         let mut P = M::identity(A.nof_rows());
         let mut P_inv = M::identity(A.nof_rows());
+
         M::clear_col(&mut A, &mut P, &mut P_inv, 0);
+
         assert_eq!((&P) * A_old, A);
         assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
         assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
+
         A.col(0)
             .expect("The 0-th col exists.")
             .skip(1)
             .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     }
 
-    //#[test]
-    //#[ignore]
-    //fn non_divisible_entry() {
-    //    let mut A = matrix();
-    //    let mut Q = M::identity(A.nof_cols());
-    //    let mut P = M::identity(A.nof_rows());
-    //    M::clear_row(&mut A, &mut Q, 0);
-    //    M::clear_col(&mut A, &mut P, 0);
-    //    assert_eq!(M::non_divisible_entry(&A, 0), None);
-    //    assert_eq!(P * matrix() * Q, A);
-    //}
+    #[test]
+    fn non_divisible_entry() {
+        let mut A = matrix();
 
-    //#[test]
-    //#[ignore]
-    //fn clear_row_2nd_time() {
-    //    let mut A = matrix();
-    //    let mut Q = M::identity(A.nof_cols());
-    //    let mut P = M::identity(A.nof_rows());
-    //    M::clear_row(&mut A, &mut Q, 0);
-    //    M::clear_col(&mut A, &mut P, 0);
-    //    M::clear_row(&mut A, &mut Q, 1);
-    //    assert_eq!(P * matrix() * Q, A);
-    //
-    //    A.row(0)
-    //        .expect("The 0-th row exists.")
-    //        .skip(1)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //
-    //    A.col(0)
-    //        .expect("The 0-th col exists.")
-    //        .skip(1)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //
-    //    A.row(1)
-    //        .expect("The 1-th row exists.")
-    //        .skip(2)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //}
-    //
-    //#[test]
-    //#[ignore]
-    //fn clear_col_2nd_time() {
-    //    let mut A = matrix();
-    //    let mut Q = M::identity(A.nof_cols());
-    //    let mut P = M::identity(A.nof_rows());
-    //    M::clear_row(&mut A, &mut Q, 0);
-    //    M::clear_col(&mut A, &mut P, 0);
-    //    M::clear_col(&mut A, &mut P, 1);
-    //    assert_eq!(P * matrix() * Q, A);
-    //
-    //    A.row(0)
-    //        .expect("The 0-th row exists.")
-    //        .skip(1)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //
-    //    A.col(0)
-    //        .expect("The 0-th col exists.")
-    //        .skip(1)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //
-    //    A.col(1)
-    //        .expect("The 1-th row exists.")
-    //        .skip(2)
-    //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
-    //}
-    //
+        let mut Q = M::identity(A.nof_cols());
+        let mut Q_inv = M::identity(A.nof_cols());
+
+        let mut P = M::identity(A.nof_rows());
+        let mut P_inv = M::identity(A.nof_rows());
+
+        M::clear_row(&mut A, &mut Q, &mut Q_inv, 0);
+        M::clear_col(&mut A, &mut P, &mut P_inv, 0);
+
+        assert_eq!(M::non_divisible_entry(&A, 0), None);
+    }
+
+    #[test]
+    fn clear_row_2nd_time() {
+        let A_old = matrix();
+        let mut A = A_old.clone();
+
+        let mut Q = M::identity(A.nof_cols());
+        let mut Q_inv = M::identity(A.nof_cols());
+
+        let mut P = M::identity(A.nof_rows());
+        let mut P_inv = M::identity(A.nof_rows());
+
+        M::clear_row(&mut A, &mut Q, &mut Q_inv, 0);
+        M::clear_col(&mut A, &mut P, &mut P_inv, 0);
+        M::clear_row(&mut A, &mut Q, &mut Q_inv, 1);
+
+        assert_eq!((&P) * A_old * (&Q), A);
+        assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
+        assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+        assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
+        assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
+
+        A.row(0)
+            .expect("The 0-th row exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+
+        A.col(0)
+            .expect("The 0-th col exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+
+        A.row(1)
+            .expect("The 1-th row exists.")
+            .skip(2)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+    }
+
+    #[test]
+    fn clear_col_2nd_time() {
+        let A_old = matrix();
+        let mut A = A_old.clone();
+
+        let mut Q = M::identity(A.nof_cols());
+        let mut Q_inv = M::identity(A.nof_cols());
+
+        let mut P = M::identity(A.nof_rows());
+        let mut P_inv = M::identity(A.nof_rows());
+
+        M::clear_row(&mut A, &mut Q, &mut Q_inv, 0);
+        M::clear_col(&mut A, &mut P, &mut P_inv, 0);
+        M::clear_col(&mut A, &mut P, &mut P_inv, 1);
+
+        assert_eq!((&P) * A_old * (&Q), A);
+        assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
+        assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+        assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
+        assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
+
+        A.row(0)
+            .expect("The 0-th row exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+
+        A.col(0)
+            .expect("The 0-th col exists.")
+            .skip(1)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+
+        A.col(1)
+            .expect("The 1-th row exists.")
+            .skip(2)
+            .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
+    }
+
     #[test]
     fn smith() {
         let (P, D, Q) = matrix().smith();

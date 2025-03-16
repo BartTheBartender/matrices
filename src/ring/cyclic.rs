@@ -81,9 +81,10 @@ macro_rules! impl_cyclic {
             const ONE: Self = Self { value: 1 };
 
             /// The canonized element up to association is `b = gcd(a, N)`.
-            fn canonize(a: Self) -> (Self, Self) {
-                let (b, x, _) = Integer::extended_gcd(Integer::from(a), Integer::from(N));
-                (Self::from(b), Self::from(x))
+            fn canonize(a: Self) -> (Self, Self, Self) {
+                let a_integer = Integer::from(a);
+                let (b, x, _) = Integer::extended_gcd(a_integer, Integer::from(N));
+                (Self::from(b), Self::from(x), Self::from(a_integer / b))
             }
 
             fn try_left_divide(self, b: Self) -> Option<Self> {

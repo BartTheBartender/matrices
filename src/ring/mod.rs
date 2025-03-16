@@ -1,21 +1,6 @@
 pub mod cyclic;
 pub mod integers;
 
-//macro_rules! twice_smaller_unsigned_type {
-//    (i16) => {
-//        u8
-//    };
-//    (i32) => {
-//        u16
-//    };
-//    (i64) => {
-//        u32
-//    };
-//    (i128) => {
-//        u64
-//    };
-//}
-
 use std::{
     hash::Hash,
     iter::Sum,
@@ -70,16 +55,17 @@ pub trait Ring:
         Self::try_right_divide(b, self).is_some()
     }
 
-    /// This function returns a pair `(a_canon, to_canon)` such that
+    /// This function returns a pair `(a_canon, to_canon, from_canon)` such that
     /// - `a_canon` is associated to `a`
-    /// - `a * to_canon = a_canon`
-    /// - `canonize(a_canon) = (a_canon, Self::ONE)`.
+    /// - `to_canon * a = a_canon`
+    /// - `from_canon * a_canon = a`
+    /// - `canonize(a_canon) = (a_canon, _, _)`.
     /// - `Self::ONE` is `canonize`d.
-    fn canonize(a: Self) -> (Self, Self);
+    fn canonize(a: Self) -> (Self, Self, Self);
 
     /// Determines if `a` is canonized (see ``Self::canonize``).
     fn is_canonized(a: Self) -> bool {
-        let (a_canon, _) = Self::canonize(a);
+        let (a_canon, _, _) = Self::canonize(a);
         a_canon == a
     }
 }
@@ -148,7 +134,7 @@ impl<R: Euclidean> Gcd for R {
         }
 
         let (gcd, x, y) = extended_euclidean_algorithm(a, b);
-        let (gcd_canon, to_canon) = Self::canonize(gcd);
+        let (gcd_canon, to_canon, _) = Self::canonize(gcd);
         (gcd_canon, x * to_canon, y * to_canon)
     }
 
@@ -163,7 +149,7 @@ impl<R: Euclidean> Gcd for R {
         }
 
         let g = euclidean_algorithm(a, b);
-        let (g_canon, _) = Self::canonize(g);
+        let (g_canon, _, _) = Self::canonize(g);
         g_canon
     }
 }
