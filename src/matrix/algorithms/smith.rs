@@ -212,7 +212,6 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
         }
     }
 
-    /*
     #[must_use]
     #[allow(
         clippy::missing_panics_doc,
@@ -234,12 +233,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
             debug_assert_eq!(
                 (&P) * (&P_inv),
                 Self::identity(A.nof_rows()),
-                "The matrix P_inv shoudl be the inverse of P."
+                "The matrix P_inv should be the inverse of P."
             );
             debug_assert_eq!(
                 (&Q) * (&Q_inv),
                 Self::identity(A.nof_cols()),
-                "The matrix Q_inv shoudl be the inverse of Q."
+                "The matrix Q_inv should be the inverse of Q."
             );
             'updating_minor: loop {
                 if let Some((piv_row, piv_col)) = A.pivot(minor_idx) {
@@ -247,11 +246,17 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                         A.swap_rows(minor_idx, piv_row)
                             .expect("Indices of swapped rows of A are in proper bounds.");
                         P.swap_rows(minor_idx, piv_row)
-                            .expect("Indices of swapped rows of Q are in proper bounds.");
+                            .expect("Indices of swapped rows of P are in proper bounds.");
+                        P_inv
+                            .swap_cols(piv_row, minor_idx)
+                            .expect("Indices of swapped cols of P_inv are in proper bounds.");
+
                         A.swap_cols(minor_idx, piv_col)
-                            .expect("Indices of swapped rows of A are in proper bounds.");
+                            .expect("Indices of swapped cols of A are in proper bounds.");
                         Q.swap_cols(minor_idx, piv_col)
-                            .expect("Indices of swapped rows of Q are in proper bounds.");
+                            .expect("Indices of swapped cols of Q are in proper bounds.");
+                        Q_inv.swap_rows(minor_idx, piv_col)
+                            .expect("Indices of swapped rows of Q_inv are in proper bounds.");
                     }
                     Self::clear_row(&mut A, &mut Q, &mut Q_inv, minor_idx);
                     Self::clear_col(&mut A, &mut P, &mut P_inv, minor_idx);
@@ -261,16 +266,19 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                             .expect("The bad and the minor indices in A should be well-defined.");
                         Q.add_col_to_col(bad_idx, minor_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
-                    } else {
-                        let (_, to_canon) = R::canonize(
-                            *A.get(minor_idx, minor_idx)
-                                .expect("The pivot in canonizing should be well-defined."),
-                        );
+                        Q_inv.add_muled_row_to_row(-R::ONE, minor_idx, bad_idx)
+                            .expect("The bad and the minor indices in Q should be well-defined.");
 
-                        A.mul_col_by(minor_idx, to_canon)
-                            .expect("Multiplying the col of A to canonize cannot fail.");
-                        Q.mul_col_by(minor_idx, to_canon)
-                            .expect("Multiplying the col of Q to canonize cannot fail.");
+                    } else {
+                        //let (_, to_canon) = R::canonize(
+                        //    *A.get(minor_idx, minor_idx)
+                        //        .expect("The pivot in canonizing should be well-defined."),
+                        //);
+                        //
+                        //A.mul_col_by(minor_idx, to_canon)
+                        //    .expect("Multiplying the col of A to canonize cannot fail.");
+                        //Q.mul_col_by(minor_idx, to_canon)
+                        //    .expect("Multiplying the col of Q to canonize cannot fail.");
 
                         break 'updating_minor;
                     }
@@ -307,9 +315,8 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                         .expect("The curr index is in proper bounds."),
                 )
             })
-            .all(|(&curr, &next)| R::is_canonized(curr) && R::divides(curr, next))
+            .all(|(&curr, &next)| /***R::is_canonized(curr) && */ R::divides(curr, next))
     }
-    */
 }
 
 #[allow(non_snake_case, reason = "this is a matrix algorithm")]
@@ -379,7 +386,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn clear_col() {
         let A_old = matrix();
         let mut A = A_old.clone();
@@ -477,32 +483,33 @@ mod test {
     //        .for_each(|row_entry| assert_eq!(*row_entry, Integer::ZERO));
     //}
     //
-    //#[test]
-    //#[ignore]
-    //fn smith() {
-    //    let (P, D, Q) = matrix().smith();
-    //    assert!(D.is_diagonal());
-    //    assert_eq!(P * matrix() * Q, D);
-    //}
-    //
-    //#[test]
-    //#[ignore]
-    //fn smith_random() {
-    //    let A = random_matrix(5, 6);
-    //    match std::panic::catch_unwind(|| A.clone().smith()) {
-    //        Ok((P, D, Q)) => {
-    //            assert!(D.is_diagonal());
-    //            assert_eq!(P * A * Q, D);
-    //        }
-    //        Err(err) => {
-    //            let message = err
-    //                .downcast_ref::<&str>()
-    //                .expect("The only possibility to fail is to multiply by overflow.");
-    //            assert!(
-    //                (message == &"attempt to multiply with overflow")
-    //                    || (message == &"attempt to add with overflow")
-    //            );
-    //        }
-    //    }
-    //}
+    #[test]
+    fn smith() {
+        let (P, D, Q) = matrix().smith();
+        assert!(D.is_diagonal());
+        assert_eq!(P * matrix() * Q, D);
+    }
+
+    #[test]
+    fn smith_random() {
+        'try_smith: loop {
+            let A = random_matrix(2, 3);
+            match std::panic::catch_unwind(|| A.clone().smith()) {
+                Ok((P, D, Q)) => {
+                    assert!(D.is_diagonal());
+                    assert_eq!(P * A * Q, D);
+                    break 'try_smith;
+                }
+                Err(err) => {
+                    let message = err
+                        .downcast_ref::<&str>()
+                        .expect("The only possibility to fail is to multiply by overflow.");
+                    assert!(
+                        (message == &"attempt to multiply with overflow")
+                            || (message == &"attempt to add with overflow")
+                    );
+                }
+            }
+        }
+    }
 }

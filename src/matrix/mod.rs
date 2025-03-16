@@ -521,7 +521,7 @@ mod test {
     #[test]
     fn lower_triangular() {
         assert!(
-            M::from_cols_arr([[1, 0, 0, 0], [2, 1, 0, 0], [3, 78, 9, 0]]).is_upper_triangular()
+            M::from_cols_arr([[1, 0, 0, 0], [2, 1, 0, 0], [3, 78, 9, 0]]).is_lower_triangular()
         );
     }
 
