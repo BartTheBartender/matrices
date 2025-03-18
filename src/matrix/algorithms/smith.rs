@@ -6,7 +6,7 @@ use std::ops::Not;
     clippy::arithmetic_side_effects,
     reason = "this is a matrix algorithm"
 )]
-impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
+impl<R: Euclidean> Matrix<R> {
     /// Returns the element in the principal minor in the submatrix ``A[minor_idx..][minor_idx..]`` with the smallest ``R::norm()``.
     fn pivot(&self, minor_idx: usize) -> Option<(usize, usize)> {
         self.cols()
@@ -48,14 +48,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                 != R::ZERO,
             "The pivot in clear_row cannot be zero."
         );
-        debug_assert_eq!(
-            (&*Q) * (&*Q_inv),
-            Self::identity(Q.nof_cols()),
+        debug_assert!(
+            (&*Q) * (&*Q_inv) == Self::identity(Q.nof_cols()),
             "Q_inv should be an inverse of Q at the start of clear_row."
         );
-        debug_assert_eq!(
-            (&*Q_inv) * (&*Q),
-            Self::identity(Q.nof_cols()),
+        debug_assert!(
+            (&*Q_inv) * (&*Q) == Self::identity(Q.nof_cols()),
             "Q_inv should be an inverse of Q at the start of clear_row."
         );
 
@@ -81,14 +79,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                     .add_muled_row_to_row(q, col_idx, minor_idx)
                     .expect("Addition of col to col in Q_inv will succeed.");
 
-                debug_assert_eq!(
-                    (&*Q) * (&*Q_inv),
-                    Self::identity(Q.nof_cols()),
+                debug_assert!(
+                    (&*Q) * (&*Q_inv) == Self::identity(Q.nof_cols()),
                     "Q_inv should be an inverse of Q after adding col to col."
                 );
-                debug_assert_eq!(
-                    (&*Q_inv) * (&*Q),
-                    Self::identity(Q.nof_cols()),
+                debug_assert!(
+                    (&*Q_inv) * (&*Q) == Self::identity(Q.nof_cols()),
                     "Q_inv should be an inverse of Q after adding col to col."
                 );
 
@@ -105,14 +101,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                         .swap_rows(minor_idx, col_idx)
                         .expect("Swapping cols in Q_inv will succeed.");
 
-                    debug_assert_eq!(
-                        (&*Q) * (&*Q_inv),
-                        Self::identity(Q.nof_cols()),
+                    debug_assert!(
+                        (&*Q) * (&*Q_inv) == Self::identity(Q.nof_cols()),
                         "Q_inv should be an inverse of Q after swapping cols."
                     );
-                    debug_assert_eq!(
-                        (&*Q_inv) * (&*Q),
-                        Self::identity(Q.nof_cols()),
+                    debug_assert!(
+                        (&*Q_inv) * (&*Q) == Self::identity(Q.nof_cols()),
                         "Q_inv should be an inverse of Q after swapping cols."
                     );
                     debug_assert!(
@@ -133,14 +127,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                 != R::ZERO,
             "The pivot in clear_col cannot be zero."
         );
-        debug_assert_eq!(
-            (&*P) * (&*P_inv),
-            Self::identity(P.nof_cols()),
+        debug_assert!(
+            (&*P) * (&*P_inv) == Self::identity(P.nof_cols()),
             "P_inv should be an inverse of P at the start of clear_col."
         );
-        debug_assert_eq!(
-            (&*P_inv) * (&*P),
-            Self::identity(P.nof_cols()),
+        debug_assert!(
+            (&*P_inv) * (&*P) == Self::identity(P.nof_cols()),
             "P_inv should be an inverse of P at the start of clear_col."
         );
 
@@ -167,14 +159,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                     .add_muled_col_to_col(q, row_idx, minor_idx)
                     .expect("Addition of col to col in P_inv will succeed.");
 
-                debug_assert_eq!(
-                    (&*P) * (&*P_inv),
-                    Self::identity(P.nof_cols()),
+                debug_assert!(
+                    (&*P) * (&*P_inv) == Self::identity(P.nof_cols()),
                     "P_inv should be an inverse of P after adding col to col."
                 );
-                debug_assert_eq!(
-                    (&*P_inv) * (&*P),
-                    Self::identity(P.nof_cols()),
+                debug_assert!(
+                    (&*P_inv) * (&*P) == Self::identity(P.nof_cols()),
                     "P_inv should be an inverse of P after adding col to col."
                 );
 
@@ -191,14 +181,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                         .swap_cols(minor_idx, row_idx)
                         .expect("Swapping cols in P_inv will succeed.");
 
-                    debug_assert_eq!(
-                        (&*P) * (&*P_inv),
-                        Self::identity(P.nof_cols()),
+                    debug_assert!(
+                        (&*P) * (&*P_inv) == Self::identity(P.nof_cols()),
                         "P_inv should be an inverse of P after swapping cols."
                     );
-                    debug_assert_eq!(
-                        (&*P_inv) * (&*P),
-                        Self::identity(P.nof_cols()),
+                    debug_assert!(
+                        (&*P_inv) * (&*P) == Self::identity(P.nof_cols()),
                         "P_inv should be an inverse of P after swapping cols."
                     );
                     debug_assert!(
@@ -217,7 +205,7 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
         clippy::missing_panics_doc,
         reason = "elementary operations and getters cannot panic since indices are in proper bounds"
     )]
-    pub fn smith(self) -> (Self, Self, Self) {
+    pub fn smith(self) -> (Self, Self, Self, Self, Self) {
         #[cfg(debug_assertions)]
         let A_old = self.clone();
 
@@ -230,14 +218,12 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
         let mut Q_inv = Self::identity(A.nof_cols());
 
         'minor_idx: for minor_idx in 0..std::cmp::min(A.nof_rows(), A.nof_cols()) {
-            debug_assert_eq!(
-                (&P) * (&P_inv),
-                Self::identity(A.nof_rows()),
+            debug_assert!(
+                (&P) * (&P_inv) == Self::identity(A.nof_rows()),
                 "The matrix P_inv should be the inverse of P."
             );
-            debug_assert_eq!(
-                (&Q) * (&Q_inv),
-                Self::identity(A.nof_cols()),
+            debug_assert!(
+                (&Q) * (&Q_inv) == Self::identity(A.nof_cols()),
                 "The matrix Q_inv should be the inverse of Q."
             );
             'updating_minor: loop {
@@ -276,10 +262,9 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
                                 .expect("The pivot in canonizing should be well-defined."),
                         );
 
-                        debug_assert_eq!(
-                            from_canon * to_canon,
-                            R::ONE,
-                            "Canonizing should be doune by invertible ring elements."
+                        debug_assert!(
+                            from_canon * to_canon == R::ONE,
+                            "Canonizing should be done by invertible ring elements."
                         );
 
                         A.mul_col_by(minor_idx, to_canon)
@@ -305,17 +290,15 @@ impl<R: Euclidean + std::fmt::Debug + std::fmt::Display> Matrix<R> {
             (&P) * (&A_old) * (&Q) == A,
             "The matrices P and Q are not a desired change of basis in snf."
         );
-        debug_assert_eq!(
-            (&P) * (&P_inv),
-            Self::identity(A.nof_rows()),
+        debug_assert!(
+            (&P) * (&P_inv) == Self::identity(A.nof_rows()),
             "The matrix P_inv should be the inverse of P."
         );
-        debug_assert_eq!(
-            (&Q) * (&Q_inv),
-            Self::identity(A.nof_cols()),
+        debug_assert!(
+            (&Q) * (&Q_inv) == Self::identity(A.nof_cols()),
             "The matrix Q_inv should be the inverse of Q."
         );
-        (P, A, Q)
+        (A, P, P_inv, Q, Q_inv)
     }
 
     #[must_use]
@@ -545,9 +528,16 @@ mod test {
 
     #[test]
     fn smith() {
-        let (P, D, Q) = matrix().smith();
-        assert!(D.is_diagonal());
-        assert_eq!(P * matrix() * Q, D);
+        let A = matrix();
+        let (D, P, P_inv, Q, Q_inv) = A.clone().smith();
+
+        assert!(D.is_in_smith_normal_form());
+        assert_eq!((&P) * (&A) * (&Q), D);
+
+        assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
+        assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+        assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
+        assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
     }
 
     #[test]
@@ -555,9 +545,14 @@ mod test {
         'try_smith: loop {
             let A = random_matrix(2, 3);
             match std::panic::catch_unwind(|| A.clone().smith()) {
-                Ok((P, D, Q)) => {
-                    assert!(D.is_diagonal());
-                    assert_eq!(P * A * Q, D);
+                Ok((D, P, P_inv, Q, Q_inv)) => {
+                    assert!(D.is_in_smith_normal_form());
+                    assert_eq!((&P) * (&A) * (&Q), D);
+
+                    assert_eq!((&Q_inv) * (&Q), M::identity(A.nof_cols()));
+                    assert_eq!((&Q) * (&Q_inv), M::identity(A.nof_cols()));
+                    assert_eq!((&P_inv) * (&P), M::identity(A.nof_rows()));
+                    assert_eq!((&P) * (&P_inv), M::identity(A.nof_rows()));
                     break 'try_smith;
                 }
                 Err(err) => {

@@ -64,6 +64,15 @@ impl<R: Ring> Matrix<R> {
         id
     }
 
+    pub unsafe fn mul_col_by_unchecked(&mut self, col_idx: usize, r: R) {
+        #![allow(
+            clippy::arithmetic_side_effects,
+            reason = "Ring operations are defined using math symbols."
+        )]
+        self.col_mut_unchecked(col_idx)
+            .for_each(|entry| *entry = *entry * r)
+    }
+
     /// Multiplies `col_idx`-th collumn by `r`.
     /// # Errors
     /// If `col_idx >= self.nof_cols()`, function returns error.
