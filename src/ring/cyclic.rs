@@ -1,14 +1,14 @@
 /// I cannot use const generic parameter of type given by a type alias.
 macro_rules! impl_cyclic {
     ($natural_type: tt) => {
-        use super::{CommutativeRing, Gcd, Integer, Noetherian, Ring};
+        use super::{CommutativeRing, Finite, Gcd, Integer, Noetherian, Ring};
         use std::{
             cmp::Ordering,
             fmt,
             iter::Sum,
             ops::{Add, Mul, Neg, Sub},
         };
-        #[derive(Clone, Copy, Eq, PartialEq, Debug)]
+        #[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
         pub struct Cyclic<const N: $natural_type> {
             value: $natural_type,
         }
@@ -71,7 +71,7 @@ macro_rules! impl_cyclic {
                 I: Iterator<Item = Self>,
             {
                 Self {
-                    value: iter.map(|number| number.value).sum::<$natural_type>(),
+                    value: iter.map(|number| number.value).sum::<$natural_type>() % N,
                 }
             }
         }
@@ -110,6 +110,11 @@ macro_rules! impl_cyclic {
 
         impl<const N: $natural_type> CommutativeRing for Cyclic<N> {}
         impl<const N: $natural_type> Noetherian for Cyclic<N> {}
+        impl<const N: $natural_type> Finite for Cyclic<N> {
+            fn elements() -> impl ExactSizeIterator<Item = Self> {
+                (0..N).map(|value| Self { value })
+            }
+        }
 
         impl<const N: $natural_type> fmt::Display for Cyclic<N> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

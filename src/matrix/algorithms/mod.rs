@@ -1,16 +1,27 @@
 pub mod smith;
 use super::*;
-use crate::ring::Euclidean;
+use crate::ring::Integer;
 
 #[allow(
     non_snake_case,
     clippy::arithmetic_side_effects,
     reason = "this is a matrix algorithm"
 )]
-impl<R: Euclidean + std::fmt::Display> Matrix<R> {
+impl<R: Ring + From<Integer> + Into<Integer>> Matrix<R> {
+    pub fn smith_from_integer(self) -> (Self, Self, Self, Self, Self) {
+        let (D, P, P_inv, Q, Q_inv) = Matrix::<Integer>::from_vec_2d(self).smith();
+        (
+            Matrix::<R>::from_vec_2d(D),
+            Matrix::<R>::from_vec_2d(P),
+            Matrix::<R>::from_vec_2d(P_inv),
+            Matrix::<R>::from_vec_2d(Q),
+            Matrix::<R>::from_vec_2d(Q_inv),
+        )
+    }
+
     // / Returns a matrix `K` wich embeds the kernel into the domain.
     pub fn kernel(self) -> Self {
-        let (D, _, _, Q, _) = self.smith();
+        let (D, _, _, Q, _) = self.smith_from_integer();
         let ker_D = D.kernel_diagonal();
         debug_assert!(
             (&D * &ker_D).is_zero(),

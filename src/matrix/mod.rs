@@ -1,7 +1,7 @@
 pub mod algorithms;
 pub mod vec2d;
 
-use crate::ring::Ring;
+use crate::ring::{Finite, Ring};
 use custom_error::custom_error;
 use itertools::iproduct;
 use std::ops::{Add, Mul, Neg, Sub};
@@ -249,7 +249,7 @@ impl<R: Ring> Matrix<R> {
     }
 }
 
-impl<R: Ring + std::panic::RefUnwindSafe + std::panic::UnwindSafe> Matrix<R> {
+impl<R: Ring + Finite> Matrix<R> {
     /// For given matrix `a`, returns `a`^`n` such that `a`^`n`=`a`^`n+1`
     /// or None if such power doesn't exists.
     #[must_use]
@@ -264,23 +264,19 @@ impl<R: Ring + std::panic::RefUnwindSafe + std::panic::UnwindSafe> Matrix<R> {
             reason = "Matrix multiplication uses math symbols."
         )]
 
-        std::panic::catch_unwind(|| {
-            let last_idx = powers.len() - 1; // powers.len() > 0
-            let self_nth_power: &Self = unsafe { powers.get_unchecked(last_idx) };
-            let self_n_plus_one_power = self_nth_power * self;
+        let last_idx = powers.len() - 1; // powers.len() > 0
+        let self_nth_power: &Self = unsafe { powers.get_unchecked(last_idx) };
+        let self_n_plus_one_power = self_nth_power * self;
 
-            if let Some(repeated_power_idx) = powers
-                .iter()
-                .position(|self_kth_power| self_kth_power == &self_n_plus_one_power)
-            {
-                (repeated_power_idx == last_idx).then_some(self_n_plus_one_power)
-            } else {
-                powers.push(self_n_plus_one_power);
-                self.infinite_power_helper(powers)
-            }
-        })
-        .ok()
-        .flatten()
+        if let Some(repeated_power_idx) = powers
+            .iter()
+            .position(|self_kth_power| self_kth_power == &self_n_plus_one_power)
+        {
+            (repeated_power_idx == last_idx).then_some(self_n_plus_one_power)
+        } else {
+            powers.push(self_n_plus_one_power);
+            self.infinite_power_helper(powers)
+        }
     }
 }
 
@@ -528,7 +524,7 @@ impl<R: Ring> Mul<Vec<R>> for Matrix<R> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ring::integers::Integer;
+    use crate::ring::{cyclic::Cyclic, integers::Integer};
 
     type M = Matrix<Integer>;
 
@@ -564,10 +560,8 @@ mod test {
 
     #[test]
     fn add() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![3, 2, 1], vec![6, 5, 4]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[3, 2, 1], [6, 5, 4]]);
 
         assert_eq!(
             (a + b).into_rows_vec(),
@@ -578,17 +572,14 @@ mod test {
     #[test]
     #[should_panic(expected = "Incorrect shapes: self.shape() = (2, 3), other.shape() = (2, 4).")]
     fn add_wrong_shapes() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![3, 2, 1, 17], vec![6, 5, 4, 13]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[3, 2, 1, 17], [6, 5, 4, 13]]);
         let _ = a + b;
     }
 
     #[test]
     fn neg() {
-        let a = M::from_rows_vec(vec![vec![5, 7, 8], vec![7, 8, 9]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[5, 7, 8], [7, 8, 9]]);
         assert_eq!(
             (-a).into_rows_vec(),
             vec![vec![-5, -7, -8], vec![-7, -8, -9]]
@@ -597,10 +588,8 @@ mod test {
 
     #[test]
     fn sub() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![3, 2, 1], vec![6, 5, 4]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[3, 2, 1], [6, 5, 4]]);
 
         assert_eq!(
             (a - b).into_rows_vec(),
@@ -611,19 +600,15 @@ mod test {
     #[test]
     #[should_panic(expected = "Incorrect shapes: self.shape() = (2, 3), other.shape() = (2, 4).")]
     fn sub_wrong_shapes() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![3, 2, 1, 17], vec![6, 5, 4, 13]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[3, 2, 1, 17], [6, 5, 4, 13]]);
         let _ = a - b;
     }
 
     #[test]
     fn mul() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![4, 5, 6, 7], vec![7, 8, 9, 0]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[1, 2, 3, 4], [4, 5, 6, 7], [7, 8, 9, 0]]);
 
         let c = a * b;
 
@@ -635,7 +620,7 @@ mod test {
 
     #[test]
     fn mul_by_zero() {
-        let a = M::from_rows_vec(vec![vec![1; 2]; 8]).expect("This should be well-defined");
+        let a = M::from_rows_arr([[1; 2]; 8]);
 
         assert_eq!(M::zero(8, 8) * (&a), M::zero(8, 2));
         assert_eq!((&a) * M::zero(2, 7), M::zero(8, 7));
@@ -644,18 +629,15 @@ mod test {
     #[test]
     #[should_panic(expected = "Incorrect shapes: self.row_len() = 3, other.col_len() = 2.")]
     fn mul_wrong_shapes() {
-        let a = M::from_rows_vec(vec![vec![1, 2, 3], vec![4, 5, 6]])
-            .expect("This should be well-defined.");
-        let b = M::from_rows_vec(vec![vec![3, 2, 1, 17], vec![6, 5, 4, 13]])
-            .expect("This should be well-defined.");
+        let a = M::from_rows_arr([[1, 2, 3], [4, 5, 6]]);
+        let b = M::from_rows_arr([[3, 2, 1, 17], [6, 5, 4, 13]]);
 
         let _ = a * b;
     }
 
     #[test]
     fn mul_matrix_vector_1() {
-        let a =
-            M::from_rows_vec(vec![vec![3, 0], vec![0, 4]]).expect("This should be well-defined");
+        let a = M::from_rows_arr([[3, 0], [0, 4]]);
         let v = vec![1, 2];
 
         assert_eq!(a * v, vec![3, 8]);
@@ -663,26 +645,22 @@ mod test {
 
     #[test]
     fn mul_matrix_vector_2() {
-        let a = M::from_rows_vec(vec![vec![3, 0], vec![0, 4], vec![1, -1]])
-            .expect("This should be well-defined");
+        let a = M::from_rows_arr([[3, 0], [0, 4], [1, -1]]);
         let v = vec![1, 2];
 
-        assert_eq!(a * v, vec![3, 8, -1]);
+        assert_eq!(a * v, [3, 8, -1]);
     }
 
     #[test]
     #[should_panic(expected = "Incorrect shapes: matrix.row_len() = 2, vec.len() = 3")]
     fn mul_matrix_vector_wrong_shapes() {
-        let a =
-            M::from_rows_vec(vec![vec![3, 0], vec![0, 4]]).expect("This should be well-defined");
+        let a = M::from_rows_arr([[3, 0], [0, 4]]);
         let _ = a * vec![1, 2, 3];
     }
 
     #[test]
     fn add_col_to_col() {
-        let mut matrix =
-            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
-                .expect("This should be well-defined.");
+        let mut matrix = M::from_rows_arr([[1, 2, 3, 4], [2, 4, 6, 8], [3, 6, 9, 12]]);
         matrix
             .add_col_to_col(0, 2)
             .expect("This should be well-defined");
@@ -694,9 +672,7 @@ mod test {
 
     #[test]
     fn add_muled_col_to_col() {
-        let mut matrix =
-            M::from_rows_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
-                .expect("This should be well-defined.");
+        let mut matrix = M::from_rows_arr([[1, 2, 3, 4], [2, 4, 6, 8], [3, 6, 9, 12]]);
         matrix
             .add_muled_col_to_col(-3, 0, 2)
             .expect("This should be well-defined");
@@ -708,9 +684,7 @@ mod test {
 
     #[test]
     fn add_row_to_row() {
-        let mut matrix =
-            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
-                .expect("This should be well-defined.");
+        let mut matrix = M::from_cols_arr([[1, 2, 3, 4], [2, 4, 6, 8], [3, 6, 9, 12]]);
         matrix
             .add_row_to_row(0, 2)
             .expect("This should be well-defined");
@@ -722,9 +696,7 @@ mod test {
 
     #[test]
     fn add_muled_row_to_row() {
-        let mut matrix =
-            M::from_cols_vec(vec![vec![1, 2, 3, 4], vec![2, 4, 6, 8], vec![3, 6, 9, 12]])
-                .expect("This should be well-defined.");
+        let mut matrix = M::from_cols_arr([[1, 2, 3, 4], [2, 4, 6, 8], [3, 6, 9, 12]]);
         matrix
             .add_muled_row_to_row(-3, 0, 2)
             .expect("This should be well-defined");
@@ -736,8 +708,11 @@ mod test {
 
     #[test]
     fn infinite_power_1() {
-        let matrix = M::from_rows_vec(vec![vec![0, 1, 0], vec![0, 0, 1], vec![1, 0, 0]])
-            .expect("This should be well-defined.");
+        let matrix = Matrix::<Cyclic<2137>>::from_vec_2d(M::from_rows_arr([
+            [0, 1, 0],
+            [0, 0, 1],
+            [1, 0, 0],
+        ]));
 
         let matrix_inf_power = matrix.infinite_power();
         assert!(matrix_inf_power.is_none());
@@ -745,8 +720,11 @@ mod test {
 
     #[test]
     fn infinite_power_2() {
-        let matrix = M::from_rows_vec(vec![vec![2, -2, -4], vec![-1, 3, 4], vec![1, -2, -3]])
-            .expect("This should be well-defined.");
+        let matrix: Matrix<Cyclic<3>> = Matrix::<Cyclic<3>>::from_vec_2d(M::from_rows_arr([
+            [2, -2, -4],
+            [-1, 3, 4],
+            [1, -2, -3],
+        ]));
         assert_eq!(
             matrix.infinite_power().expect("This matrix is idempotent."),
             matrix
