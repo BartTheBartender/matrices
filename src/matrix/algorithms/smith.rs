@@ -286,23 +286,27 @@ impl<R: Euclidean> Matrix<R> {
                 }
             }
         }
-        debug_assert_eq!(A_old.shape(), A.shape(), "Sanity check.");
-        debug_assert!(
-            A.is_in_smith_normal_form(),
-            "The matrix should be in the smith normal form."
-        );
-        debug_assert!(
-            (&P) * (&A_old) * (&Q) == A,
-            "The matrices P and Q are not a desired change of basis in snf."
-        );
-        debug_assert!(
-            (&P) * (&P_inv) == Self::identity(A.nof_rows()),
-            "The matrix P_inv should be the inverse of P."
-        );
-        debug_assert!(
-            (&Q) * (&Q_inv) == Self::identity(A.nof_cols()),
-            "The matrix Q_inv should be the inverse of Q."
-        );
+
+        #[cfg(debug_assertions)]
+        {
+            debug_assert_eq!(A_old.shape(), A.shape(), "Sanity check.");
+            debug_assert!(
+                A.is_in_smith_normal_form(),
+                "The matrix should be in the smith normal form."
+            );
+            debug_assert!(
+                (&P) * (&A_old) * (&Q) == A,
+                "The matrices P and Q are not a desired change of basis in snf."
+            );
+            debug_assert!(
+                (&P) * (&P_inv) == Self::identity(A.nof_rows()),
+                "The matrix P_inv should be the inverse of P."
+            );
+            debug_assert!(
+                (&Q) * (&Q_inv) == Self::identity(A.nof_cols()),
+                "The matrix Q_inv should be the inverse of Q."
+            );
+        }
         (A, P, P_inv, Q, Q_inv)
     }
 
