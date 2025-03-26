@@ -247,7 +247,9 @@ impl<R: Ring> Matrix<R> {
             .ok_or(MatrixError::AddedRowToItself { idx: row_idx_1 })
             .flatten()
     }
+}
 
+impl<R: Ring + std::panic::RefUnwindSafe + std::panic::UnwindSafe> Matrix<R> {
     /// For given matrix `a`, returns `a`^`n` such that `a`^`n`=`a`^`n+1`
     /// or None if such power doesn't exists.
     #[must_use]
@@ -261,19 +263,24 @@ impl<R: Ring> Matrix<R> {
             clippy::arithmetic_side_effects,
             reason = "Matrix multiplication uses math symbols."
         )]
-        let last_idx = powers.len() - 1; // powers.len() > 0
-        let self_nth_power: &Self = unsafe { powers.get_unchecked(last_idx) };
-        let self_n_plus_one_power = self_nth_power * self;
 
-        if let Some(repeated_power_idx) = powers
-            .iter()
-            .position(|self_kth_power| self_kth_power == &self_n_plus_one_power)
-        {
-            (repeated_power_idx == last_idx).then_some(self_n_plus_one_power)
-        } else {
-            powers.push(self_n_plus_one_power);
-            self.infinite_power_helper(powers)
-        }
+        std::panic::catch_unwind(|| {
+            let last_idx = powers.len() - 1; // powers.len() > 0
+            let self_nth_power: &Self = unsafe { powers.get_unchecked(last_idx) };
+            let self_n_plus_one_power = self_nth_power * self;
+
+            if let Some(repeated_power_idx) = powers
+                .iter()
+                .position(|self_kth_power| self_kth_power == &self_n_plus_one_power)
+            {
+                (repeated_power_idx == last_idx).then_some(self_n_plus_one_power)
+            } else {
+                powers.push(self_n_plus_one_power);
+                self.infinite_power_helper(powers)
+            }
+        })
+        .ok()
+        .flatten()
     }
 }
 

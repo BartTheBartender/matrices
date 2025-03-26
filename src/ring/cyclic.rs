@@ -169,5 +169,5 @@ macro_rules! impl_cyclic {
     };
 }
 
-pub type Natural = u16;
+pub type Natural = u64;
 impl_cyclic!(u16);

@@ -1,5 +1,5 @@
 use super::{CommutativeRing, Euclidean, NonZero, Ring};
-pub type Integer = i32;
+pub type Integer = i128;
 impl Ring for Integer {
     const ZERO: Self = 0;
     const ONE: Self = 1;
