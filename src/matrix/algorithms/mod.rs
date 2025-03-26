@@ -46,6 +46,31 @@ impl<R: Ring + From<Integer> + Into<Integer>> Matrix<R> {
         )
         .expect("The kernel of a diagonal matrix should be well-defined.")
     }
+
+    /// Assumes that `A` is diagonal, counts non-zero collumns. Possibly optimize
+    pub fn rank_diagonal(&self) -> usize {
+        self.cols().fold(0, |count, mut col| {
+            if col.any(|&entry| entry != R::ZERO) {
+                count.saturating_add(1)
+            } else {
+                count
+            }
+        })
+    }
+
+    /// Computes rank of a not_diagonal matrix.
+    pub fn rank(self) -> usize {
+        let (D, _, _, _, _) = self.smith_from_integer();
+        D.rank_diagonal()
+    }
+
+    pub fn is_mono(self) -> bool {
+        self.row_len() <= self.col_len() && self.row_len() == self.rank()
+    }
+
+    pub fn is_epi(self) -> bool {
+        self.col_len() <= self.row_len() && self.col_len() == self.rank()
+    }
 }
 
 #[cfg(test)]
@@ -73,5 +98,11 @@ mod test {
         let matrix = Matrix::<R>::from_rows_arr([[1, -1, -1], [2, -2, 1]]);
         let kernel = matrix.clone().kernel();
         assert!((matrix * kernel).is_zero());
+    }
+
+    #[test]
+    fn rank_diagonal() {
+        let diagonal_matrix = Matrix::<R>::from_rows_arr([[0, 0, 0], [0, 0, 0], [0, 0, 123]]);
+        assert_eq!(diagonal_matrix.rank_diagonal(), 1);
     }
 }

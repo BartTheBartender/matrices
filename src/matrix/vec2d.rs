@@ -1,4 +1,3 @@
-use crate::ring::Finite;
 use bitvec::prelude::*;
 use custom_error::custom_error;
 use itertools::Itertools;
