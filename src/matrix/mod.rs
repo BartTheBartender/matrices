@@ -44,6 +44,11 @@ impl<R: Ring> Matrix<R> {
         self.is_upper_triangular() && self.is_lower_triangular()
     }
 
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        self.buffer.iter().all(|entry| *entry == R::ZERO)
+    }
+
     /// A zero `nof_rows` x `nof_cols` matrix.
     #[must_use]
     pub fn zero(nof_rows: usize, nof_cols: usize) -> Self {
@@ -247,6 +252,7 @@ impl<R: Ring> Matrix<R> {
     /// or None if such power doesn't exists.
     #[must_use]
     pub fn infinite_power(&self) -> Option<Self> {
+        debug_assert!(self.is_square(), "Cannot iterate non-square matrix.");
         let powers = [self.clone()].to_vec();
         self.infinite_power_helper(powers)
     }
@@ -255,7 +261,6 @@ impl<R: Ring> Matrix<R> {
             clippy::arithmetic_side_effects,
             reason = "Matrix multiplication uses math symbols."
         )]
-        debug_assert!(self.is_square(), "Cannot iterate non-square matrix.");
         let last_idx = powers.len() - 1; // powers.len() > 0
         let self_nth_power: &Self = unsafe { powers.get_unchecked(last_idx) };
         let self_n_plus_one_power = self_nth_power * self;

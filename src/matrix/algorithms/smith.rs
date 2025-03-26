@@ -227,6 +227,7 @@ impl<R: Euclidean> Matrix<R> {
                 "The matrix Q_inv should be the inverse of Q."
             );
             'updating_minor: loop {
+                // Seek pivot. If does not exists algotihm terinates.
                 if let Some((piv_row, piv_col)) = A.pivot(minor_idx) {
                     {
                         A.swap_rows(minor_idx, piv_row)
@@ -245,6 +246,7 @@ impl<R: Euclidean> Matrix<R> {
                             .swap_rows(minor_idx, piv_col)
                             .expect("Indices of swapped rows of Q_inv are in proper bounds.");
                     }
+                    // clear row and collumn.
                     Self::clear_row(&mut A, &mut Q, &mut Q_inv, minor_idx);
                     Self::clear_col(&mut A, &mut P, &mut P_inv, minor_idx);
 
@@ -257,6 +259,7 @@ impl<R: Euclidean> Matrix<R> {
                             .add_muled_row_to_row(-R::ONE, minor_idx, bad_idx)
                             .expect("The bad and the minor indices in Q should be well-defined.");
                     } else {
+                        // if all entries are divisible, canonize the entry at the diagonal.
                         let (_, to_canon, from_canon) = R::canonize(
                             *A.get(minor_idx, minor_idx)
                                 .expect("The pivot in canonizing should be well-defined."),
@@ -278,10 +281,12 @@ impl<R: Euclidean> Matrix<R> {
                         break 'updating_minor;
                     }
                 } else {
+                    // note that canonizing is not needed, since `R::ZERO` is canonized.
                     break 'minor_idx;
                 }
             }
         }
+        debug_assert_eq!(A_old.shape(), A.shape(), "Sanity check.");
         debug_assert!(
             A.is_in_smith_normal_form(),
             "The matrix should be in the smith normal form."
