@@ -105,4 +105,11 @@ mod test {
         let diagonal_matrix = Matrix::<R>::from_rows_arr([[0, 0, 0], [0, 0, 0], [0, 0, 123]]);
         assert_eq!(diagonal_matrix.rank_diagonal(), 1);
     }
+
+    #[test]
+    fn mono_epi() {
+        let matrix = Matrix::<R>::from_rows_arr([[0, 1], [1, 0]]);
+        assert!(matrix.clone().is_epi());
+        assert!(matrix.is_mono());
+    }
 }

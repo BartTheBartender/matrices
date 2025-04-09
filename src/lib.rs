@@ -109,3 +109,4 @@ pub mod matrix;
     reason = "the ring uses mathematical notation"
 )]
 pub mod ring;
+pub mod prelude;
